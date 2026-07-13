@@ -1,0 +1,16 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Terraform variable overrides
+*.auto.tfvars
+*.tfvars
+
+# OS files
+.DS_Store
+
+# Editor files
+.vscode/
+.idea/

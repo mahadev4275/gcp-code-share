@@ -1,5 +1,5 @@
 resource "google_observability_trace_scope" "observability_trace_scope" {
-  trace_scope_id = "test-scope1"
+  trace_scope_id = "test-scope"
   location       = var.location
 
   resource_names = [
@@ -9,4 +9,3 @@ resource "google_observability_trace_scope" "observability_trace_scope" {
 
   description = "A trace scope configured with Terraform"
 }
-
