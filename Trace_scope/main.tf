@@ -1,10 +1,5 @@
-provider "google" {
-  project = var.project
-  region  = var.region
-}
-
 module "trace_scope" {
-  source = "./Trace_scope"
+  source = "./Tf_for_scope"
 
   location = var.location
   project  = var.project
