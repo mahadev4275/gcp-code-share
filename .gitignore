@@ -14,3 +14,31 @@
 # Editor files
 .vscode/
 .idea/
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Coverage
+*.out
+coverage.out
+
+# Go workspace
+
+go.work
+go.work.sum
+
+# Vendor (optional - ignore only if not committing vendor)
+vendor/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
