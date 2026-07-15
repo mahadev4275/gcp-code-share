@@ -2,21 +2,19 @@ package tests
 
 import (
 	"context"
-	"flag"
+	"os"
 	"testing"
 
 	serviceusage "google.golang.org/api/serviceusage/v1"
 )
 
-var projectID string
-
-func init() {
-	flag.StringVar(&projectID, "project_id", "", "Google Cloud Project ID")
-}
-
 func TestServiceUsage(t *testing.T) {
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 	if projectID == "" {
-		t.Fatal("project_id flag is required. Usage: go test ./tests/... -args -project_id=YOUR_PROJECT_ID")
+		projectID = os.Getenv("PROJECT_ID")
+	}
+	if projectID == "" {
+		t.Fatal("GCP Project ID must be set via the GOOGLE_CLOUD_PROJECT or PROJECT_ID environment variable")
 	}
 
 	ctx := context.Background()
