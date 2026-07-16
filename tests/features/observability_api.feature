@@ -1,3 +1,4 @@
+@obs_api
 Feature: GCP Observability API Enablement Check
   As a GCP administrator
   I want to ensure that the observability API (Cloud Trace) is enabled

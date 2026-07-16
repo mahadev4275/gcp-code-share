@@ -1,3 +1,4 @@
+@GA
 Feature: GCP APIs General Availability Check
   As a GCP administrator
   I want to ensure all enabled APIs in the project are in General Availability (GA)

@@ -1,12 +1,15 @@
 package tests
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"testing"
 
 	"github.com/cucumber/godog"
 )
+
+var godogTags = flag.String("godog.tags", "", "filter scenarios by tags")
 
 // bddContext holds the shared state for a single BDD scenario execution
 type bddContext struct {
@@ -44,6 +47,7 @@ func TestFeatures(t *testing.T) {
 			Format:   "pretty",
 			Paths:    []string{"features"},
 			TestingT: t,
+			Tags:     *godogTags,
 		},
 	}
 
