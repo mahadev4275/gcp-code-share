@@ -3,12 +3,11 @@ package tests
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
-	"testing"
 	"time"
 
 	serviceusage "google.golang.org/api/serviceusage/v1"
@@ -29,24 +28,20 @@ func isGAVersion(version string) bool {
 	return !strings.Contains(v, "beta") && !strings.Contains(v, "alpha") && !strings.Contains(v, "preview")
 }
 
-func TestGCPAPIsGeneralAvailability(t *testing.T) {
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if projectID == "" {
-		projectID = os.Getenv("PROJECT_ID")
-	}
-	if projectID == "" {
-		t.Fatal("GCP Project ID must be set via the GOOGLE_CLOUD_PROJECT or PROJECT_ID environment variable")
-	}
+func (c *bddContext) registerGAPISteps(sc *godog.ScenarioContext) {
+	sc.Step(`^I list the enabled services in the project$`, c.iListTheEnabledServicesInTheProject)
+	sc.Step(`^I retrieve the Google Cloud APIs Discovery document$`, c.iRetrieveTheGoogleCloudAPIsDiscoveryDocument)
+	sc.Step(`^all enabled APIs should have at least one General Availability version$`, c.allEnabledAPIsShouldHaveAtLeastOneGeneralAvailabilityVersion)
+}
 
+func (c *bddContext) iListTheEnabledServicesInTheProject() error {
 	ctx := context.Background()
 	service, err := serviceusage.NewService(ctx)
 	if err != nil {
-		t.Fatal(err)
+		return fmt.Errorf("failed to create serviceusage client: %w", err)
 	}
 
-	// 1. Fetch the list of enabled services for the project
-	var enabledServices []string
-	parent := "projects/" + projectID
+	parent := "projects/" + c.projectID
 	pageToken := ""
 	for {
 		req := service.Services.List(parent).Filter("state:ENABLED").Context(ctx)
@@ -55,33 +50,35 @@ func TestGCPAPIsGeneralAvailability(t *testing.T) {
 		}
 		resp, err := req.Do()
 		if err != nil {
-			t.Fatalf("Failed to list enabled services: %v", err)
+			return fmt.Errorf("failed to list enabled services: %w", err)
 		}
 		for _, s := range resp.Services {
 			parts := strings.Split(s.Name, "/")
 			serviceName := parts[len(parts)-1]
-			enabledServices = append(enabledServices, serviceName)
+			c.enabledServices = append(c.enabledServices, serviceName)
 		}
 		if resp.NextPageToken == "" {
 			break
 		}
 		pageToken = resp.NextPageToken
 	}
+	return nil
+}
 
-	// 2. Fetch the discovery document to build the service-to-version map
+func (c *bddContext) iRetrieveTheGoogleCloudAPIsDiscoveryDocument() error {
 	client := &http.Client{Timeout: 15 * time.Second}
 	discResp, err := client.Get("https://discovery.googleapis.com/discovery/v1/apis")
 	if err != nil {
-		t.Fatalf("Failed to fetch Google APIs Discovery document: %v", err)
+		return fmt.Errorf("failed to fetch Google APIs Discovery document: %w", err)
 	}
 	defer discResp.Body.Close()
 
 	var discoveryData DiscoveryResponse
 	if err := json.NewDecoder(discResp.Body).Decode(&discoveryData); err != nil {
-		t.Fatalf("Failed to decode Google APIs Discovery document: %v", err)
+		return fmt.Errorf("failed to decode Google APIs Discovery document: %w", err)
 	}
 
-	serviceNameToVersions := make(map[string][]string)
+	c.serviceNameToVersions = make(map[string][]string)
 	for _, item := range discoveryData.Items {
 		if item.DiscoveryRestUrl == "" {
 			continue
@@ -98,17 +95,18 @@ func TestGCPAPIsGeneralAvailability(t *testing.T) {
 			}
 		}
 		if host != "" {
-			serviceNameToVersions[host] = append(serviceNameToVersions[host], item.Version)
+			c.serviceNameToVersions[host] = append(c.serviceNameToVersions[host], item.Version)
 		}
 	}
+	return nil
+}
 
-	// 3. Verify GA status for all enabled APIs
+func (c *bddContext) allEnabledAPIsShouldHaveAtLeastOneGeneralAvailabilityVersion() error {
 	var nonGAServices []string
-	for _, serviceName := range enabledServices {
-		versions, exists := serviceNameToVersions[serviceName]
+	for _, serviceName := range c.enabledServices {
+		versions, exists := c.serviceNameToVersions[serviceName]
 		if !exists {
 			// Some internal or system APIs might not be present in the public discovery directory.
-			t.Logf("Warning: Service %s not found in Google APIs Discovery directory. Skipping GA status check.", serviceName)
 			continue
 		}
 
@@ -122,13 +120,11 @@ func TestGCPAPIsGeneralAvailability(t *testing.T) {
 
 		if !isGA {
 			nonGAServices = append(nonGAServices, serviceName)
-			t.Errorf("Service %s is enabled but has no General Availability (GA) versions. Available versions: %v", serviceName, versions)
 		}
 	}
 
 	if len(nonGAServices) > 0 {
-		t.Errorf("Failed: %d enabled GCP APIs are not in General Availability (GA) status: %v", len(nonGAServices), nonGAServices)
-	} else {
-		t.Logf("Success: All checkable enabled GCP APIs are in General Availability (GA) status.")
+		return fmt.Errorf("failed: %d enabled GCP APIs are not in General Availability (GA) status: %v", len(nonGAServices), nonGAServices)
 	}
+	return nil
 }
