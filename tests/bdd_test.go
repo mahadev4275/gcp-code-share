@@ -52,6 +52,13 @@ func TestFeatures(t *testing.T) {
 
 			// Register Terratest lifecycle hooks
 			sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
+				// Populate project ID from environment
+				projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+				if projectID == "" {
+					projectID = os.Getenv("PROJECT_ID")
+				}
+				c.projectID = projectID
+
 				// Setup target directory
 				terraformDir := "../Trace_scope"
 				c.tfOpts = &terraform.Options{
