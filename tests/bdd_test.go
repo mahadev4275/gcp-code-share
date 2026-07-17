@@ -21,6 +21,7 @@ type bddContext struct {
 	serviceNameToVersions map[string][]string
 	traceServiceState     string
 	tfOpts                *terraform.Options
+	t                     *testing.T
 }
 
 func (c *bddContext) theGCPProjectIDIsConfigured() error {
@@ -38,7 +39,7 @@ func (c *bddContext) theGCPProjectIDIsConfigured() error {
 func TestFeatures(t *testing.T) {
 	suite := godog.TestSuite{
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
-			c := &bddContext{}
+			c := &bddContext{t: t}
 
 			// Common steps
 			sc.Step(`^the GCP project ID is configured$`, c.theGCPProjectIDIsConfigured)
@@ -47,6 +48,7 @@ func TestFeatures(t *testing.T) {
 			c.registerGAPISteps(sc)
 			c.registerObservabilitySteps(sc)
 			c.registerResourcePublicAccessSteps(sc)
+			c.registerCMEKPolicySteps(sc)
 
 			// Register Terratest lifecycle hooks
 			sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
