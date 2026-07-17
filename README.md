@@ -45,13 +45,14 @@ To verify the active state of your deployed resources in your target GCP project
 Make sure you have authenticated credentials with access to the target project (e.g., via `gcloud auth application-default login` or setting the `GOOGLE_APPLICATION_CREDENTIALS` environment variable).
 
 ### Running Feature Tests
-Set the project ID environment variable and specify the BDD tag:
+Set the project ID environment variable and specify the BDD tag. Use `-run TestFeatures` to ensure that only the BDD suite runs (and skips the static Rego checks):
 ```bash
 export PROJECT_ID=your_gcp_project_id
-go test -v ./tests/ -godog.tags="@public_access"
+go test -v ./tests/ -run TestFeatures -godog.tags="@public_access"
 ```
 
 Common tags include:
 - `@public_access`: Verifies public access prevention, IAM rules, and VPC Service Controls.
 - `@GA`: Checks if enabled GCP APIs are in General Availability (GA) status.
 - `@obs_api`: Checks if the Cloud Observability API is enabled.
+- `@cmek`: Audits Customer Managed Encryption Keys (CMEK) settings.
