@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -66,11 +67,12 @@ func TestPublicAccessRegoPolicyWithTerratest(t *testing.T) {
 
 	// Run terraform init and plan
 	planFile := filepath.Join(terraformDir, "tfplan")
-	terraform.RunTerraformCommand(t, terraformOptions, "init")
-	terraform.RunTerraformCommand(t, terraformOptions, "plan", "-out", planFile)
+	ctx := context.Background()
+	terraform.RunTerraformCommandContext(t, ctx, terraformOptions, "init")
+	terraform.RunTerraformCommandContext(t, ctx, terraformOptions, "plan", "-out", planFile)
 
 	// Run terraform show -json tfplan
-	planJSON := terraform.RunTerraformCommand(t, terraformOptions, "show", "-json", planFile)
+	planJSON := terraform.RunTerraformCommandContext(t, ctx, terraformOptions, "show", "-json", planFile)
 
 	// Save plan JSON to a temporary file for conftest
 	tmpPlanJSON := filepath.Join(terraformDir, "tfplan.json")
@@ -86,6 +88,6 @@ func TestPublicAccessRegoPolicyWithTerratest(t *testing.T) {
 		WorkingDir: terraformDir,
 	}
 	
-	output, err := shell.RunCommandAndGetOutputE(t, conftestCmd)
+	output, err := shell.RunCommandContextAndGetOutputE(t, ctx, &conftestCmd)
 	assert.NoError(t, err, "Conftest policy check failed:\n%s", output)
 }

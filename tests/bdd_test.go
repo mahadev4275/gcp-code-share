@@ -91,7 +91,7 @@ func TestFeatures(t *testing.T) {
 
 				// Run Terraform Init and Apply
 				t.Logf("Running terraform init and apply for scenario: %s", scenario.Name)
-				if _, err := terraform.InitAndApplyE(t, c.tfOpts); err != nil {
+				if _, err := terraform.InitAndApplyContextE(t, ctx, c.tfOpts); err != nil {
 					return ctx, fmt.Errorf("terraform apply failed: %w", err)
 				}
 
@@ -102,7 +102,7 @@ func TestFeatures(t *testing.T) {
 				// Run Terraform Destroy to clean up resources
 				if c.tfOpts != nil {
 					t.Logf("Running terraform destroy for scenario: %s", scenario.Name)
-					if _, destErr := terraform.DestroyE(t, c.tfOpts); destErr != nil {
+					if _, destErr := terraform.DestroyContextE(t, ctx, c.tfOpts); destErr != nil {
 						t.Errorf("terraform destroy failed: %v", destErr)
 					}
 				}
