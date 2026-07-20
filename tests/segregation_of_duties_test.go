@@ -97,7 +97,7 @@ var (
 func TestSegregationOfDuties(t *testing.T) {
 	t.Parallel()
 
-	repoRoot := "../.."
+	repoRoot := ".."
 	resources, err := collectTerraformResources(repoRoot)
 	assert.NoError(t, err)
 

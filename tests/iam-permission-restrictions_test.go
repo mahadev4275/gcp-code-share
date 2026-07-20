@@ -26,7 +26,7 @@ func TestIAMSecurityGuardrails(t *testing.T) {
 	t.Parallel()
 
 	// Read all Terraform resources in the repository once, then reuse in each sub-test.
-	repoRoot := "../.."
+	repoRoot := ".."
 	resources, err := collectTerraformResources(repoRoot)
 	assert.NoError(t, err)
 
