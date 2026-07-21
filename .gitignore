@@ -45,3 +45,6 @@ Thumbs.db
 
 # Devcontainer
 .devcontainer/
+
+# log files
+*.log
