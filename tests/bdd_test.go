@@ -49,6 +49,7 @@ func TestFeatures(t *testing.T) {
 			c.registerObservabilitySteps(sc)
 			c.registerResourcePublicAccessSteps(sc)
 			c.registerCMEKPolicySteps(sc)
+			c.registerIAMPermissionRestrictionsSteps(sc)
 
 			// Register Terratest lifecycle hooks
 			sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
