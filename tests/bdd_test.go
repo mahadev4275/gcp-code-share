@@ -22,6 +22,7 @@ type bddContext struct {
 	traceServiceState     string
 	tfOpts                *terraform.Options
 	t                     *testing.T
+	plannedChanges        []PlanResourceChange
 }
 
 func (c *bddContext) theGCPProjectIDIsConfigured() error {
@@ -49,6 +50,9 @@ func TestFeatures(t *testing.T) {
 			c.registerObservabilitySteps(sc)
 			c.registerResourcePublicAccessSteps(sc)
 			c.registerCMEKPolicySteps(sc)
+			c.registerIAMPermissionRestrictionsSteps(sc)
+			c.registerCustomRolesForControlPlaneSteps(sc)
+			c.registerSegregationOfDutiesSteps(sc)
 
 			// Register Terratest lifecycle hooks
 			sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {

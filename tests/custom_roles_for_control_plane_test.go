@@ -1,12 +1,18 @@
 package tests
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/cucumber/godog"
 )
+
+type memberRoleAssignment struct {
+	Address      string
+	ResourceType string
+	Role         string
+}
 
 // controlPlaneRoleKeywords identify predefined (vendor-managed) roles that grant
 // control-plane write actions (CREATE/UPDATE/DELETE). Read-only roles such as
@@ -39,135 +45,181 @@ var vaultKeyManagementForbiddenRoles = []string{
 	"roles/editor",
 }
 
-// Package-level regexes for role classification. Names are unique to this file
-// to avoid clashing with declarations in SECURITY_IF_008 / SECURITY_IF_009.
+// Package-level regexes for role classification. Names are unique to this file.
 var (
 	// Predefined (vendor-managed) roles are referenced as roles/<service>.<name>.
 	predefinedRoleRe = regexp.MustCompile(`^roles/[^/]+$`)
 	// Custom roles are referenced by their full resource path.
 	customRoleRe = regexp.MustCompile(`^(projects|organizations)/[^/]+/roles/[^/]+$`)
-	// Match custom-role definition resources so their permissions can be audited.
-	customRoleDefRe = regexp.MustCompile(`(?i)_iam_custom_role$`)
-	// permissions = [ ... ] block inside a custom role definition.
-	customRolePermsRe = regexp.MustCompile(`(?s)permissions\s*=\s*\[([^\]]*)\]`)
 )
 
-func TestCustomRolesForControlPlane(t *testing.T) {
-	t.Parallel()
+func (c *bddContext) registerCustomRolesForControlPlaneSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^no vendor-managed control-plane roles should be assigned to any resources$`, c.noVendorManagedControlPlaneRolesAssigned)
+	sc.Step(`^service accounts must use custom roles instead of vendor-managed control-plane roles$`, c.serviceAccountsMustUseCustomRolesForControlPlane)
+	sc.Step(`^Vault service accounts must use custom roles for key management$`, c.vaultSAsMustUseCustomRolesForKeyManagement)
+	sc.Step(`^CI\/CD pipeline service accounts must use custom roles for deployment$`, c.cicdPipelineSAsMustUseCustomRolesForDeployment)
+	sc.Step(`^custom role definitions must enumerate explicit permissions without wildcards$`, c.customRoleDefinitionsEnumerateExplicitPermissions)
+}
 
-	repoRoot := ".."
-	resources, err := collectTerraformResources(repoRoot)
-	assert.NoError(t, err)
+func (c *bddContext) buildMemberRoleIndexForCustomRoles() map[string][]memberRoleAssignment {
+	memberRoles := make(map[string][]memberRoleAssignment)
+	for _, rc := range c.plannedChanges {
+		if !isIAMResource(rc.Type) {
+			continue
+		}
+		after := rc.Change.After
+		if after == nil {
+			continue
+		}
 
-	iamResources := filterIAMResources(resources)
+		role := getStringVal(after, "role")
+		if role == "" {
+			continue
+		}
 
-	// Reuse the member → role index builder from SECURITY_IF_009.
-	memberRoles := buildMemberRoleIndex(iamResources)
+		var members []string
+		member := getStringVal(after, "member")
+		if member != "" {
+			members = append(members, member)
+		}
+		membersList := getSliceOfStrings(after, "members")
+		members = append(members, membersList...)
 
-	t.Run("No Vendor-Managed Roles For Control-Plane", func(t *testing.T) {
-		// Any IAM binding that grants a predefined control-plane role is a
-		// violation; a custom role with enumerated permissions must be used.
-		for _, r := range iamResources {
-			for _, match := range roleLineRe.FindAllStringSubmatch(r.Body, -1) {
-				if len(match) < 2 {
-					continue
+		for _, m := range members {
+			memberRoles[m] = append(memberRoles[m], memberRoleAssignment{
+				Address:      rc.Address,
+				ResourceType: rc.Type,
+				Role:         role,
+			})
+		}
+	}
+	return memberRoles
+}
+
+func (c *bddContext) noVendorManagedControlPlaneRolesAssigned() error {
+	var violations []string
+	for _, rc := range c.plannedChanges {
+		if !isIAMResource(rc.Type) {
+			continue
+		}
+		after := rc.Change.After
+		if after == nil {
+			continue
+		}
+		role := getStringVal(after, "role")
+		if role == "" {
+			continue
+		}
+		if isVendorManagedControlPlaneRole(role) {
+			violations = append(violations, fmt.Sprintf("Vendor-managed control-plane role %q must be replaced by a custom role (resource: %s)", role, rc.Address))
+		}
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("vendor-managed control-plane role violations: %v", violations)
+	}
+	return nil
+}
+
+func (c *bddContext) serviceAccountsMustUseCustomRolesForControlPlane() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForCustomRoles()
+	for member, assignments := range memberRoles {
+		if !strings.Contains(strings.ToLower(member), "serviceaccount:") {
+			continue
+		}
+		for _, a := range assignments {
+			if isVendorManagedControlPlaneRole(a.Role) {
+				violations = append(violations, fmt.Sprintf("Service account %q must use a custom role instead of %q (resource: %s)", member, a.Role, a.Address))
+			}
+		}
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("service account control-plane role violations: %v", violations)
+	}
+	return nil
+}
+
+func (c *bddContext) vaultSAsMustUseCustomRolesForKeyManagement() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForCustomRoles()
+	for member, assignments := range memberRoles {
+		if !strings.Contains(strings.ToLower(member), "vault") {
+			continue
+		}
+		for _, a := range assignments {
+			roleLower := strings.ToLower(strings.TrimSpace(a.Role))
+			for _, forbidden := range vaultKeyManagementForbiddenRoles {
+				if forbidden == roleLower {
+					violations = append(violations, fmt.Sprintf("Vault SA %q must use a custom key-management role instead of %q (resource: %s)", member, a.Role, a.Address))
 				}
-				role := strings.TrimSpace(match[1])
-				assert.Falsef(t, isVendorManagedControlPlaneRole(role),
-					"Vendor-managed control-plane role %q must be replaced by a custom role (file: %s, resource: %s.%s)",
-					role, r.FilePath, r.Type, r.Name)
 			}
 		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("Vault SA key-management violations: %v", violations)
+	}
+	return nil
+}
 
-	t.Run("Service Accounts Use Custom Roles For Control-Plane", func(t *testing.T) {
-		// Service-account principals that receive control-plane access must be
-		// granted custom roles, never vendor-managed admin/editor/owner roles.
-		for member, assignments := range memberRoles {
-			if !strings.Contains(strings.ToLower(member), "serviceaccount:") {
-				continue
-			}
-			for _, a := range assignments {
-				if !isVendorManagedControlPlaneRole(a.Role) {
-					continue
-				}
-				assert.Failf(t, "Service account uses vendor-managed control-plane role",
-					"Service account %q must use a custom role instead of %q (file: %s, resource: %s.%s)",
-					member, a.Role, a.FilePath, a.ResourceType, a.ResourceName)
-			}
+func (c *bddContext) cicdPipelineSAsMustUseCustomRolesForDeployment() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForCustomRoles()
+	for member, assignments := range memberRoles {
+		if !isPipelineSA(member) {
+			continue
 		}
-	})
-
-	t.Run("Vault SAs Use Custom Roles For Key Management", func(t *testing.T) {
-		// HashiCorp Vault service accounts must rotate/manage keys via a custom
-		// role, not vendor-managed serviceAccountAdmin/KMS-admin roles.
-		for member, assignments := range memberRoles {
-			if !isVaultSA(member) {
-				continue
-			}
-			for _, a := range assignments {
-				roleLower := strings.ToLower(strings.TrimSpace(a.Role))
-				for _, forbidden := range vaultKeyManagementForbiddenRoles {
-					assert.NotEqualf(t, forbidden, roleLower,
-						"Vault SA %q must use a custom key-management role instead of %q (file: %s, resource: %s.%s)",
-						member, a.Role, a.FilePath, a.ResourceType, a.ResourceName)
+		for _, a := range assignments {
+			roleLower := strings.ToLower(strings.TrimSpace(a.Role))
+			for _, broad := range alwaysBroadPredefinedRoles {
+				if broad == roleLower {
+					violations = append(violations, fmt.Sprintf("Pipeline SA %q must use a custom deployment role instead of %q (resource: %s)", member, a.Role, a.Address))
 				}
 			}
-		}
-	})
-
-	t.Run("CICD Pipeline SA Uses Custom Role For Deployment", func(t *testing.T) {
-		// CI/CD pipeline service accounts must deploy via a custom role and must
-		// never be granted the primitive roles/editor or roles/owner.
-		for member, assignments := range memberRoles {
-			if !isPipelineSA(member) {
-				continue
-			}
-			for _, a := range assignments {
-				roleLower := strings.ToLower(strings.TrimSpace(a.Role))
-				for _, broad := range alwaysBroadPredefinedRoles {
-					assert.NotEqualf(t, broad, roleLower,
-						"Pipeline SA %q must use a custom deployment role instead of %q (file: %s, resource: %s.%s)",
-						member, a.Role, a.FilePath, a.ResourceType, a.ResourceName)
-				}
-				assert.Falsef(t, isVendorManagedControlPlaneRole(a.Role),
-					"Pipeline SA %q must use a custom deployment role instead of vendor-managed %q (file: %s, resource: %s.%s)",
-					member, a.Role, a.FilePath, a.ResourceType, a.ResourceName)
+			if isVendorManagedControlPlaneRole(a.Role) {
+				violations = append(violations, fmt.Sprintf("Pipeline SA %q must use a custom deployment role instead of vendor-managed %q (resource: %s)", member, a.Role, a.Address))
 			}
 		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("pipeline SA deployment role violations: %v", violations)
+	}
+	return nil
+}
 
-	t.Run("Custom Role Definitions Enumerate Explicit Permissions", func(t *testing.T) {
-		// Where custom roles are defined, they must enumerate explicit
-		// permissions and must not use wildcards, preserving least privilege.
-		for _, r := range resources {
-			if !customRoleDefRe.MatchString(strings.ToLower(r.Type)) {
-				continue
-			}
-
-			perms := extractCustomRolePermissions(r.Body)
-			assert.NotEmptyf(t, perms,
-				"Custom role %s.%s must enumerate explicit permissions (file: %s)",
-				r.Type, r.Name, r.FilePath)
-
-			for _, p := range perms {
-				assert.NotContainsf(t, p, "*",
-					"Custom role %s.%s must not use wildcard permission %q (file: %s)",
-					r.Type, r.Name, p, r.FilePath)
+func (c *bddContext) customRoleDefinitionsEnumerateExplicitPermissions() error {
+	var violations []string
+	for _, rc := range c.plannedChanges {
+		if rc.Type != "google_project_iam_custom_role" && rc.Type != "google_organization_iam_custom_role" {
+			continue
+		}
+		after := rc.Change.After
+		if after == nil {
+			continue
+		}
+		perms := getSliceOfStrings(after, "permissions")
+		if len(perms) == 0 {
+			violations = append(violations, fmt.Sprintf("Custom role %s must enumerate explicit permissions", rc.Address))
+			continue
+		}
+		for _, p := range perms {
+			if strings.Contains(p, "*") {
+				violations = append(violations, fmt.Sprintf("Custom role %s must not use wildcard permission %q", rc.Address, p))
 			}
 		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("custom role definition violations: %v", violations)
+	}
+	return nil
 }
 
 // isVendorManagedControlPlaneRole reports whether role is a predefined
 // (CSP/vendor-managed) role that grants control-plane write actions. Custom
-// roles (projects/.../roles/..., organizations/.../roles/...) and read-only
-// predefined roles (e.g. *.viewer) return false.
+// roles and read-only predefined roles (e.g. *.viewer) return false.
 func isVendorManagedControlPlaneRole(role string) bool {
 	role = strings.TrimSpace(role)
 	roleLower := strings.ToLower(role)
 
-	// Terraform expressions cannot be resolved statically; do not flag them.
 	if role == "" || strings.Contains(role, "${") ||
 		strings.HasPrefix(role, "var.") || strings.HasPrefix(role, "local.") {
 		return false
@@ -204,31 +256,14 @@ func isVendorManagedControlPlaneRole(role string) bool {
 	return false
 }
 
-// isVaultSA reports whether the IAM member string represents a HashiCorp Vault
-// service account.
-func isVaultSA(member string) bool {
+// isPipelineSA returns true when the IAM member string represents a service
+// account associated with an automated pipeline or CI/CD system.
+func isPipelineSA(member string) bool {
 	lower := strings.ToLower(member)
-	return strings.Contains(lower, "serviceaccount:") && strings.Contains(lower, "vault")
-}
-
-// extractCustomRolePermissions returns the individual permission strings declared
-// in a custom-role definition body.
-func extractCustomRolePermissions(body string) []string {
-	var perms []string
-
-	m := customRolePermsRe.FindStringSubmatch(body)
-	if len(m) < 2 {
-		return perms
-	}
-
-	for _, qm := range quotedValueRe.FindAllStringSubmatch(m[1], -1) {
-		if len(qm) > 1 {
-			v := strings.TrimSpace(qm[1])
-			if v != "" {
-				perms = append(perms, v)
-			}
-		}
-	}
-
-	return perms
+	return strings.Contains(lower, "serviceaccount:") &&
+		(strings.Contains(lower, "tfe") ||
+			strings.Contains(lower, "pipeline") ||
+			strings.Contains(lower, "cicd") ||
+			strings.Contains(lower, "ci-cd") ||
+			strings.Contains(lower, "deploy"))
 }

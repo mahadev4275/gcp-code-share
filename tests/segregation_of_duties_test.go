@@ -1,20 +1,11 @@
 package tests
 
 import (
-	"regexp"
+	"fmt"
 	"strings"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/cucumber/godog"
 )
-
-// memberRoleAssignment ties a role string back to the resource that grants it.
-type memberRoleAssignment struct {
-	FilePath     string
-	ResourceType string
-	ResourceName string
-	Role         string
-}
 
 // conflictingDutyPair describes two mutually-exclusive sets of role prefixes.
 // Holding roles from both sets in the same principal is a segregation-of-duties
@@ -86,168 +77,112 @@ var humanOnlyRolePrefixes = []string{
 	"roles/resourcemanager.organizationadmin",
 }
 
-// Package-level compiled regexes used by SOD helpers.
-var (
-	singleMemberRe = regexp.MustCompile(`(?m)^\s*member\s*=\s*"([^"]+)"`)
-	listMemberRe   = regexp.MustCompile(`(?s)members\s*=\s*\[([^\]]+)\]`)
-	quotedValueRe  = regexp.MustCompile(`"([^"]+)"`)
-	roleLineRe     = regexp.MustCompile(`(?m)^\s*role\s*=\s*"([^"]+)"`)
-)
-
-func TestSegregationOfDuties(t *testing.T) {
-	t.Parallel()
-
-	repoRoot := ".."
-	resources, err := collectTerraformResources(repoRoot)
-	assert.NoError(t, err)
-
-	iamResources := filterIAMResources(resources)
-
-	// Build a member → role index once and reuse across sub-tests.
-	memberRoles := buildMemberRoleIndex(iamResources)
-
-	t.Run("No Conflicting Duties Per Principal", func(t *testing.T) {
-		// Ensure no single principal accumulates roles from both sides of any
-		// conflicting-duty pair. Terraform variable references that cannot be
-		// statically resolved are skipped (see addMemberToSet).
-		for member, assignments := range memberRoles {
-			var roles []string
-			for _, a := range assignments {
-				roles = append(roles, a.Role)
-			}
-
-			for _, pair := range sodConflictingPairs {
-				hasSetA := roleMatchesAnyPrefix(roles, pair.SetA)
-				hasSetB := roleMatchesAnyPrefix(roles, pair.SetB)
-				assert.Falsef(t, hasSetA && hasSetB,
-					"Principal %q holds conflicting duties (%s). Detected roles: %v",
-					member, pair.Description, roles)
-			}
-		}
-	})
-
-	t.Run("Pipeline SA Has Deployment Permissions Only", func(t *testing.T) {
-		// Pipeline/CI-CD service accounts must not hold human-operator
-		// governance or review roles.
-		for member, assignments := range memberRoles {
-			if !isPipelineSA(member) {
-				continue
-			}
-			for _, a := range assignments {
-				roleLower := strings.ToLower(a.Role)
-				for _, prefix := range humanOnlyRolePrefixes {
-					assert.Falsef(t, strings.HasPrefix(roleLower, prefix),
-						"Pipeline SA %q holds human-operator role %q which is not allowed (file: %s, resource: %s.%s)",
-						member, a.Role, a.FilePath, a.ResourceType, a.ResourceName)
-				}
-			}
-		}
-	})
-
-	t.Run("Human Principals Do Not Hold Pipeline Deployment Roles", func(t *testing.T) {
-		// Human user: and group: principals must not accumulate automated
-		// pipeline deployment capabilities.
-		for member, assignments := range memberRoles {
-			if !strings.HasPrefix(member, "user:") && !strings.HasPrefix(member, "group:") {
-				continue
-			}
-			for _, a := range assignments {
-				roleLower := strings.ToLower(a.Role)
-				for _, prefix := range pipelineRolePrefixes {
-					assert.Falsef(t, strings.HasPrefix(roleLower, prefix),
-						"Human principal %q holds pipeline-only role %q (file: %s, resource: %s.%s)",
-						member, a.Role, a.FilePath, a.ResourceType, a.ResourceName)
-				}
-			}
-		}
-	})
+func (c *bddContext) registerSegregationOfDutiesSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^no principal should hold conflicting duties$`, c.noPrincipalShouldHoldConflictingDuties)
+	sc.Step(`^pipeline service accounts must only have deployment permissions and no human governance roles$`, c.pipelineServiceAccountsDeploymentOnly)
+	sc.Step(`^human principals must not hold pipeline deployment roles$`, c.humanPrincipalsNotHoldPipelineDeploymentRoles)
 }
 
-// buildMemberRoleIndex returns a map keyed by IAM member identity string.
-// Each value is the slice of role assignments made to that member across all
-// resources in the provided list. Terraform-interpolated or variable-reference
-// member strings are skipped because they cannot be statically resolved.
-func buildMemberRoleIndex(resources []tfResource) map[string][]memberRoleAssignment {
-	index := make(map[string][]memberRoleAssignment)
+func (c *bddContext) buildMemberRoleIndexForSegregationOfDuties() map[string][]memberRoleAssignment {
+	memberRoles := make(map[string][]memberRoleAssignment)
+	for _, rc := range c.plannedChanges {
+		if !isIAMResource(rc.Type) {
+			continue
+		}
+		after := rc.Change.After
+		if after == nil {
+			continue
+		}
 
-	for _, r := range resources {
-		roleMatches := roleLineRe.FindAllStringSubmatch(r.Body, -1)
-		members := extractAllMembersFromBody(r.Body)
+		role := getStringVal(after, "role")
+		if role == "" {
+			continue
+		}
 
-		for _, rm := range roleMatches {
-			if len(rm) < 2 {
-				continue
-			}
-			role := strings.TrimSpace(rm[1])
-			for _, member := range members {
-				index[member] = append(index[member], memberRoleAssignment{
-					FilePath:     r.FilePath,
-					ResourceType: r.Type,
-					ResourceName: r.Name,
-					Role:         role,
-				})
+		var members []string
+		member := getStringVal(after, "member")
+		if member != "" {
+			members = append(members, member)
+		}
+		membersList := getSliceOfStrings(after, "members")
+		members = append(members, membersList...)
+
+		for _, m := range members {
+			memberRoles[m] = append(memberRoles[m], memberRoleAssignment{
+				Address:      rc.Address,
+				ResourceType: rc.Type,
+				Role:         role,
+			})
+		}
+	}
+	return memberRoles
+}
+
+func (c *bddContext) noPrincipalShouldHoldConflictingDuties() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForSegregationOfDuties()
+	for member, assignments := range memberRoles {
+		var roles []string
+		for _, a := range assignments {
+			roles = append(roles, a.Role)
+		}
+
+		for _, pair := range sodConflictingPairs {
+			hasSetA := roleMatchesAnyPrefix(roles, pair.SetA)
+			hasSetB := roleMatchesAnyPrefix(roles, pair.SetB)
+			if hasSetA && hasSetB {
+				violations = append(violations, fmt.Sprintf("Principal %q holds conflicting duties (%s). Detected roles: %v", member, pair.Description, roles))
 			}
 		}
 	}
-
-	return index
+	if len(violations) > 0 {
+		return fmt.Errorf("segregation of duties violations: %v", violations)
+	}
+	return nil
 }
 
-// extractAllMembersFromBody returns all unique, statically-known member/principal
-// strings found in a Terraform resource body, handling both the singular
-// `member = "..."` and plural `members = [...]` attribute forms.
-func extractAllMembersFromBody(body string) []string {
-	var members []string
-	seen := make(map[string]struct{})
-
-	// Singular form: member = "serviceAccount:..."
-	for _, m := range singleMemberRe.FindAllStringSubmatch(body, -1) {
-		if len(m) > 1 {
-			addMemberToSet(&members, seen, m[1])
+func (c *bddContext) pipelineServiceAccountsDeploymentOnly() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForSegregationOfDuties()
+	for member, assignments := range memberRoles {
+		if !isPipelineSA(member) {
+			continue
 		}
-	}
-
-	// Plural form: members = ["serviceAccount:...", "user:..."]
-	for _, m := range listMemberRe.FindAllStringSubmatch(body, -1) {
-		if len(m) > 1 {
-			for _, qm := range quotedValueRe.FindAllStringSubmatch(m[1], -1) {
-				if len(qm) > 1 {
-					addMemberToSet(&members, seen, qm[1])
+		for _, a := range assignments {
+			roleLower := strings.ToLower(a.Role)
+			for _, prefix := range humanOnlyRolePrefixes {
+				if strings.HasPrefix(roleLower, strings.ToLower(prefix)) {
+					violations = append(violations, fmt.Sprintf("Pipeline SA %q holds human-operator role %q (resource: %s)", member, a.Role, a.Address))
 				}
 			}
 		}
 	}
-
-	return members
+	if len(violations) > 0 {
+		return fmt.Errorf("pipeline SA permission violations: %v", violations)
+	}
+	return nil
 }
 
-// addMemberToSet appends v to members if it has not been seen before and is
-// a resolvable static literal (not a Terraform variable or interpolation).
-func addMemberToSet(members *[]string, seen map[string]struct{}, v string) {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return
+func (c *bddContext) humanPrincipalsNotHoldPipelineDeploymentRoles() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForSegregationOfDuties()
+	for member, assignments := range memberRoles {
+		if !strings.HasPrefix(member, "user:") && !strings.HasPrefix(member, "group:") {
+			continue
+		}
+		for _, a := range assignments {
+			roleLower := strings.ToLower(a.Role)
+			for _, prefix := range pipelineRolePrefixes {
+				if strings.HasPrefix(roleLower, strings.ToLower(prefix)) {
+					violations = append(violations, fmt.Sprintf("Human principal %q holds pipeline-only role %q (resource: %s)", member, a.Role, a.Address))
+				}
+			}
+		}
 	}
-	// Skip Terraform expressions that cannot be resolved statically.
-	if strings.Contains(v, "${") || strings.HasPrefix(v, "var.") || strings.HasPrefix(v, "local.") {
-		return
+	if len(violations) > 0 {
+		return fmt.Errorf("human principal permission violations: %v", violations)
 	}
-	if _, exists := seen[v]; !exists {
-		seen[v] = struct{}{}
-		*members = append(*members, v)
-	}
-}
-
-// isPipelineSA returns true when the IAM member string represents a service
-// account associated with an automated pipeline or CI/CD system.
-func isPipelineSA(member string) bool {
-	lower := strings.ToLower(member)
-	return strings.Contains(lower, "serviceaccount:") &&
-		(strings.Contains(lower, "tfe") ||
-			strings.Contains(lower, "pipeline") ||
-			strings.Contains(lower, "cicd") ||
-			strings.Contains(lower, "ci-cd") ||
-			strings.Contains(lower, "deploy"))
+	return nil
 }
 
 // roleMatchesAnyPrefix returns true when at least one role in the slice has a
