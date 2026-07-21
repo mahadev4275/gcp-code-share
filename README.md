@@ -8,6 +8,32 @@ This repository contains Terraform configurations and validation tests (both sta
 2. **Terraform 1.0+**
 3. **Conftest** (for static policy evaluation)
 
+
+## Set up persistent binaries
+
+```bash
+mkdir -p $HOME/bin
+# Set your desired Terraform version
+TF_VERSION="1.9.5"
+
+# Download and extract to $HOME/bin
+curl -sL "https://releases.hashicorp.com/terraform/${TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -o /tmp/terraform.zip
+unzip -o /tmp/terraform.zip -d $HOME/bin/
+rm /tmp/terraform.zip
+
+# Verify installation
+terraform --version
+# Set your desired Conftest version
+CONFTEST_VERSION="0.54.0"
+
+# Download and extract to $HOME/bin
+curl -sL "https://github.com/open-policy-agent/conftest/releases/download/v${CONFTEST_VERSION}/conftest_${CONFTEST_VERSION}_Linux_x86_64.tar.gz" -o /tmp/conftest.tar.gz
+tar -xzf /tmp/conftest.tar.gz -C $HOME/bin/ conftest
+rm /tmp/conftest.tar.gz
+
+# Verify installation
+conftest --version
+```
 ---
 
 ## 1. Compliance Testing (OPA/Rego with Terratest)
