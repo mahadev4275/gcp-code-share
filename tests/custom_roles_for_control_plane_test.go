@@ -1,11 +1,11 @@
 package tests
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/cucumber/godog"
 )
 
 type memberRoleAssignment struct {
@@ -53,16 +53,17 @@ var (
 	customRoleRe = regexp.MustCompile(`^(projects|organizations)/[^/]+/roles/[^/]+$`)
 )
 
-func TestCustomRolesForControlPlane(t *testing.T) {
-	t.Parallel()
+func (c *bddContext) registerCustomRolesForControlPlaneSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^no vendor-managed control-plane roles should be assigned to any resources$`, c.noVendorManagedControlPlaneRolesAssigned)
+	sc.Step(`^service accounts must use custom roles instead of vendor-managed control-plane roles$`, c.serviceAccountsMustUseCustomRolesForControlPlane)
+	sc.Step(`^Vault service accounts must use custom roles for key management$`, c.vaultSAsMustUseCustomRolesForKeyManagement)
+	sc.Step(`^CI\/CD pipeline service accounts must use custom roles for deployment$`, c.cicdPipelineSAsMustUseCustomRolesForDeployment)
+	sc.Step(`^custom role definitions must enumerate explicit permissions without wildcards$`, c.customRoleDefinitionsEnumerateExplicitPermissions)
+}
 
-	// Load plan changes
-	changes, err := getRepositoryPlanChanges(t)
-	assert.NoError(t, err)
-
-	// Build a member -> roles index for easy querying
+func (c *bddContext) buildMemberRoleIndexForCustomRoles() map[string][]memberRoleAssignment {
 	memberRoles := make(map[string][]memberRoleAssignment)
-	for _, rc := range changes {
+	for _, rc := range c.plannedChanges {
 		if !isIAMResource(rc.Type) {
 			continue
 		}
@@ -92,95 +93,124 @@ func TestCustomRolesForControlPlane(t *testing.T) {
 			})
 		}
 	}
+	return memberRoles
+}
 
-	t.Run("No Vendor-Managed Roles For Control-Plane", func(t *testing.T) {
-		for _, rc := range changes {
-			if !isIAMResource(rc.Type) {
-				continue
-			}
-			after := rc.Change.After
-			if after == nil {
-				continue
-			}
-			role := getStringVal(after, "role")
-			if role == "" {
-				continue
-			}
-			assert.Falsef(t, isVendorManagedControlPlaneRole(role),
-				"Vendor-managed control-plane role %q must be replaced by a custom role (resource: %s)",
-				role, rc.Address)
+func (c *bddContext) noVendorManagedControlPlaneRolesAssigned() error {
+	var violations []string
+	for _, rc := range c.plannedChanges {
+		if !isIAMResource(rc.Type) {
+			continue
 		}
-	})
+		after := rc.Change.After
+		if after == nil {
+			continue
+		}
+		role := getStringVal(after, "role")
+		if role == "" {
+			continue
+		}
+		if isVendorManagedControlPlaneRole(role) {
+			violations = append(violations, fmt.Sprintf("Vendor-managed control-plane role %q must be replaced by a custom role (resource: %s)", role, rc.Address))
+		}
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("vendor-managed control-plane role violations: %v", violations)
+	}
+	return nil
+}
 
-	t.Run("Service Accounts Use Custom Roles For Control-Plane", func(t *testing.T) {
-		for member, assignments := range memberRoles {
-			if !strings.Contains(strings.ToLower(member), "serviceaccount:") {
-				continue
+func (c *bddContext) serviceAccountsMustUseCustomRolesForControlPlane() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForCustomRoles()
+	for member, assignments := range memberRoles {
+		if !strings.Contains(strings.ToLower(member), "serviceaccount:") {
+			continue
+		}
+		for _, a := range assignments {
+			if isVendorManagedControlPlaneRole(a.Role) {
+				violations = append(violations, fmt.Sprintf("Service account %q must use a custom role instead of %q (resource: %s)", member, a.Role, a.Address))
 			}
-			for _, a := range assignments {
-				if !isVendorManagedControlPlaneRole(a.Role) {
-					continue
+		}
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("service account control-plane role violations: %v", violations)
+	}
+	return nil
+}
+
+func (c *bddContext) vaultSAsMustUseCustomRolesForKeyManagement() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForCustomRoles()
+	for member, assignments := range memberRoles {
+		if !strings.Contains(strings.ToLower(member), "vault") {
+			continue
+		}
+		for _, a := range assignments {
+			roleLower := strings.ToLower(strings.TrimSpace(a.Role))
+			for _, forbidden := range vaultKeyManagementForbiddenRoles {
+				if forbidden == roleLower {
+					violations = append(violations, fmt.Sprintf("Vault SA %q must use a custom key-management role instead of %q (resource: %s)", member, a.Role, a.Address))
 				}
-				assert.Failf(t, "Service account uses vendor-managed control-plane role",
-					"Service account %q must use a custom role instead of %q (resource: %s)",
-					member, a.Role, a.Address)
 			}
 		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("Vault SA key-management violations: %v", violations)
+	}
+	return nil
+}
 
-	t.Run("Vault SAs Use Custom Roles For Key Management", func(t *testing.T) {
-		for member, assignments := range memberRoles {
-			if !strings.Contains(strings.ToLower(member), "vault") {
-				continue
-			}
-			for _, a := range assignments {
-				roleLower := strings.ToLower(strings.TrimSpace(a.Role))
-				for _, forbidden := range vaultKeyManagementForbiddenRoles {
-					assert.NotEqualf(t, forbidden, roleLower,
-						"Vault SA %q must use a custom key-management role instead of %q (resource: %s)",
-						member, a.Role, a.Address)
+func (c *bddContext) cicdPipelineSAsMustUseCustomRolesForDeployment() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForCustomRoles()
+	for member, assignments := range memberRoles {
+		if !isPipelineSA(member) {
+			continue
+		}
+		for _, a := range assignments {
+			roleLower := strings.ToLower(strings.TrimSpace(a.Role))
+			for _, broad := range alwaysBroadPredefinedRoles {
+				if broad == roleLower {
+					violations = append(violations, fmt.Sprintf("Pipeline SA %q must use a custom deployment role instead of %q (resource: %s)", member, a.Role, a.Address))
 				}
 			}
+			if isVendorManagedControlPlaneRole(a.Role) {
+				violations = append(violations, fmt.Sprintf("Pipeline SA %q must use a custom deployment role instead of vendor-managed %q (resource: %s)", member, a.Role, a.Address))
+			}
 		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("pipeline SA deployment role violations: %v", violations)
+	}
+	return nil
+}
 
-	t.Run("CICD Pipeline SA Uses Custom Role For Deployment", func(t *testing.T) {
-		for member, assignments := range memberRoles {
-			if !isPipelineSA(member) {
-				continue
-			}
-			for _, a := range assignments {
-				roleLower := strings.ToLower(strings.TrimSpace(a.Role))
-				for _, broad := range alwaysBroadPredefinedRoles {
-					assert.NotEqualf(t, broad, roleLower,
-						"Pipeline SA %q must use a custom deployment role instead of %q (resource: %s)",
-						member, a.Role, a.Address)
-				}
-				assert.Falsef(t, isVendorManagedControlPlaneRole(a.Role),
-					"Pipeline SA %q must use a custom deployment role instead of vendor-managed %q (resource: %s)",
-					member, a.Role, a.Address)
+func (c *bddContext) customRoleDefinitionsEnumerateExplicitPermissions() error {
+	var violations []string
+	for _, rc := range c.plannedChanges {
+		if rc.Type != "google_project_iam_custom_role" && rc.Type != "google_organization_iam_custom_role" {
+			continue
+		}
+		after := rc.Change.After
+		if after == nil {
+			continue
+		}
+		perms := getSliceOfStrings(after, "permissions")
+		if len(perms) == 0 {
+			violations = append(violations, fmt.Sprintf("Custom role %s must enumerate explicit permissions", rc.Address))
+			continue
+		}
+		for _, p := range perms {
+			if strings.Contains(p, "*") {
+				violations = append(violations, fmt.Sprintf("Custom role %s must not use wildcard permission %q", rc.Address, p))
 			}
 		}
-	})
-
-	t.Run("Custom Role Definitions Enumerate Explicit Permissions", func(t *testing.T) {
-		for _, rc := range changes {
-			if rc.Type != "google_project_iam_custom_role" && rc.Type != "google_organization_iam_custom_role" {
-				continue
-			}
-			after := rc.Change.After
-			if after == nil {
-				continue
-			}
-			perms := getSliceOfStrings(after, "permissions")
-			assert.NotEmptyf(t, perms,
-				"Custom role %s must enumerate explicit permissions", rc.Address)
-			for _, p := range perms {
-				assert.NotContainsf(t, p, "*",
-					"Custom role %s must not use wildcard permission %q", rc.Address, p)
-			}
-		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("custom role definition violations: %v", violations)
+	}
+	return nil
 }
 
 // isVendorManagedControlPlaneRole reports whether role is a predefined

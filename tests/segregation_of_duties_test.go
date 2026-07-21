@@ -1,10 +1,10 @@
 package tests
 
 import (
+	"fmt"
 	"strings"
-	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/cucumber/godog"
 )
 
 // conflictingDutyPair describes two mutually-exclusive sets of role prefixes.
@@ -77,16 +77,15 @@ var humanOnlyRolePrefixes = []string{
 	"roles/resourcemanager.organizationadmin",
 }
 
-func TestSegregationOfDuties(t *testing.T) {
-	t.Parallel()
+func (c *bddContext) registerSegregationOfDutiesSteps(sc *godog.ScenarioContext) {
+	sc.Step(`^no principal should hold conflicting duties$`, c.noPrincipalShouldHoldConflictingDuties)
+	sc.Step(`^pipeline service accounts must only have deployment permissions and no human governance roles$`, c.pipelineServiceAccountsDeploymentOnly)
+	sc.Step(`^human principals must not hold pipeline deployment roles$`, c.humanPrincipalsNotHoldPipelineDeploymentRoles)
+}
 
-	// Load plan changes
-	changes, err := getRepositoryPlanChanges(t)
-	assert.NoError(t, err)
-
-	// Build a member -> roles index for easy querying
+func (c *bddContext) buildMemberRoleIndexForSegregationOfDuties() map[string][]memberRoleAssignment {
 	memberRoles := make(map[string][]memberRoleAssignment)
-	for _, rc := range changes {
+	for _, rc := range c.plannedChanges {
 		if !isIAMResource(rc.Type) {
 			continue
 		}
@@ -116,59 +115,74 @@ func TestSegregationOfDuties(t *testing.T) {
 			})
 		}
 	}
+	return memberRoles
+}
 
-	t.Run("No Conflicting Duties Per Principal", func(t *testing.T) {
-		for member, assignments := range memberRoles {
-			var roles []string
-			for _, a := range assignments {
-				roles = append(roles, a.Role)
-			}
+func (c *bddContext) noPrincipalShouldHoldConflictingDuties() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForSegregationOfDuties()
+	for member, assignments := range memberRoles {
+		var roles []string
+		for _, a := range assignments {
+			roles = append(roles, a.Role)
+		}
 
-			for _, pair := range sodConflictingPairs {
-				hasSetA := roleMatchesAnyPrefix(roles, pair.SetA)
-				hasSetB := roleMatchesAnyPrefix(roles, pair.SetB)
-				assert.Falsef(t, hasSetA && hasSetB,
-					"Principal %q holds conflicting duties (%s). Detected roles: %v",
-					member, pair.Description, roles)
+		for _, pair := range sodConflictingPairs {
+			hasSetA := roleMatchesAnyPrefix(roles, pair.SetA)
+			hasSetB := roleMatchesAnyPrefix(roles, pair.SetB)
+			if hasSetA && hasSetB {
+				violations = append(violations, fmt.Sprintf("Principal %q holds conflicting duties (%s). Detected roles: %v", member, pair.Description, roles))
 			}
 		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("segregation of duties violations: %v", violations)
+	}
+	return nil
+}
 
-	t.Run("Pipeline SA Has Deployment Permissions Only", func(t *testing.T) {
-		for member, assignments := range memberRoles {
-			if !isPipelineSA(member) {
-				continue
-			}
-			for _, a := range assignments {
-				roleLower := strings.ToLower(a.Role)
-				for _, prefix := range humanOnlyRolePrefixes {
-					if strings.HasPrefix(roleLower, strings.ToLower(prefix)) {
-						assert.Failf(t, "Pipeline SA holds human-operator role",
-							"Pipeline SA %q holds human-operator role %q which is not allowed (resource: %s)",
-							member, a.Role, a.Address)
-					}
+func (c *bddContext) pipelineServiceAccountsDeploymentOnly() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForSegregationOfDuties()
+	for member, assignments := range memberRoles {
+		if !isPipelineSA(member) {
+			continue
+		}
+		for _, a := range assignments {
+			roleLower := strings.ToLower(a.Role)
+			for _, prefix := range humanOnlyRolePrefixes {
+				if strings.HasPrefix(roleLower, strings.ToLower(prefix)) {
+					violations = append(violations, fmt.Sprintf("Pipeline SA %q holds human-operator role %q (resource: %s)", member, a.Role, a.Address))
 				}
 			}
 		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("pipeline SA permission violations: %v", violations)
+	}
+	return nil
+}
 
-	t.Run("Human Principals Do Not Hold Pipeline Deployment Roles", func(t *testing.T) {
-		for member, assignments := range memberRoles {
-			if !strings.HasPrefix(member, "user:") && !strings.HasPrefix(member, "group:") {
-				continue
-			}
-			for _, a := range assignments {
-				roleLower := strings.ToLower(a.Role)
-				for _, prefix := range pipelineRolePrefixes {
-					if strings.HasPrefix(roleLower, strings.ToLower(prefix)) {
-						assert.Failf(t, "Human principal holds pipeline-only role",
-							"Human principal %q holds pipeline-only role %q (resource: %s)",
-							member, a.Role, a.Address)
-					}
+func (c *bddContext) humanPrincipalsNotHoldPipelineDeploymentRoles() error {
+	var violations []string
+	memberRoles := c.buildMemberRoleIndexForSegregationOfDuties()
+	for member, assignments := range memberRoles {
+		if !strings.HasPrefix(member, "user:") && !strings.HasPrefix(member, "group:") {
+			continue
+		}
+		for _, a := range assignments {
+			roleLower := strings.ToLower(a.Role)
+			for _, prefix := range pipelineRolePrefixes {
+				if strings.HasPrefix(roleLower, strings.ToLower(prefix)) {
+					violations = append(violations, fmt.Sprintf("Human principal %q holds pipeline-only role %q (resource: %s)", member, a.Role, a.Address))
 				}
 			}
 		}
-	})
+	}
+	if len(violations) > 0 {
+		return fmt.Errorf("human principal permission violations: %v", violations)
+	}
+	return nil
 }
 
 // roleMatchesAnyPrefix returns true when at least one role in the slice has a

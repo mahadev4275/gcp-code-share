@@ -7,12 +7,6 @@ import (
 	"github.com/cucumber/godog"
 )
 
-type iamRestrictionsState struct {
-	plannedChanges []PlanResourceChange
-}
-
-var iamState iamRestrictionsState
-
 func (c *bddContext) registerIAMPermissionRestrictionsSteps(sc *godog.ScenarioContext) {
 	sc.Step(`^I run terraform plan on all modules$`, c.iRunTerraformPlanOnAllModules)
 	sc.Step(`^no wildcard principals, wildcard roles, or wildcard permissions should be allowed$`, c.noWildcardPermissionsAllowed)
@@ -24,18 +18,21 @@ func (c *bddContext) registerIAMPermissionRestrictionsSteps(sc *godog.ScenarioCo
 }
 
 func (c *bddContext) iRunTerraformPlanOnAllModules() error {
+	if len(c.plannedChanges) > 0 {
+		return nil
+	}
 	changes, err := getRepositoryPlanChanges(c.t)
 	if err != nil {
 		return err
 	}
-	iamState.plannedChanges = changes
+	c.plannedChanges = changes
 	return nil
 }
 
 func (c *bddContext) noWildcardPermissionsAllowed() error {
 	var violations []string
 
-	for _, rc := range iamState.plannedChanges {
+	for _, rc := range c.plannedChanges {
 		if !isIAMResource(rc.Type) {
 			continue
 		}
@@ -82,7 +79,7 @@ func (c *bddContext) noWildcardPermissionsAllowed() error {
 
 func (c *bddContext) allIAMResourcesMustIncludeCondition() error {
 	var violations []string
-	for _, rc := range iamState.plannedChanges {
+	for _, rc := range c.plannedChanges {
 		if !isIAMResource(rc.Type) {
 			continue
 		}
@@ -112,7 +109,7 @@ func (c *bddContext) allIAMResourcesMustIncludeCondition() error {
 
 func (c *bddContext) noOrganizationLevelIAMBindingsAllowed() error {
 	var violations []string
-	for _, rc := range iamState.plannedChanges {
+	for _, rc := range c.plannedChanges {
 		if isIAMResource(rc.Type) {
 			if strings.Contains(strings.ToLower(rc.Type), "organization_iam_") {
 				violations = append(violations, fmt.Sprintf("Organization-level IAM binding is not allowed: %s", rc.Address))
@@ -127,7 +124,7 @@ func (c *bddContext) noOrganizationLevelIAMBindingsAllowed() error {
 
 func (c *bddContext) serviceAccountBindingsMustBeFolderOrProjectScoped() error {
 	var violations []string
-	for _, rc := range iamState.plannedChanges {
+	for _, rc := range c.plannedChanges {
 		if !isIAMResource(rc.Type) {
 			continue
 		}
@@ -169,7 +166,7 @@ func (c *bddContext) serviceAccountBindingsMustBeFolderOrProjectScoped() error {
 
 func (c *bddContext) noCrossEnvironmentServiceAccountAccess() error {
 	var violations []string
-	for _, rc := range iamState.plannedChanges {
+	for _, rc := range c.plannedChanges {
 		if !isIAMResource(rc.Type) {
 			continue
 		}
@@ -254,7 +251,7 @@ func (c *bddContext) pipelineServiceAccountsRestrictions() error {
 		"roles/logging.privateLogViewer",
 	}
 
-	for _, rc := range iamState.plannedChanges {
+	for _, rc := range c.plannedChanges {
 		if !isIAMResource(rc.Type) {
 			continue
 		}
