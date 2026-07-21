@@ -53,6 +53,7 @@ func TestFeatures(t *testing.T) {
 			c.registerIAMPermissionRestrictionsSteps(sc)
 			c.registerCustomRolesForControlPlaneSteps(sc)
 			c.registerSegregationOfDutiesSteps(sc)
+			c.registerEncryptionInTransitSteps(sc)
 
 			// Register Terratest lifecycle hooks
 			sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
