@@ -33,12 +33,18 @@ func (c *bddContext) noWildcardPermissionsAllowed() error {
 	var violations []string
 
 	for _, rc := range c.plannedChanges {
-		if !isIAMResource(rc.Type) {
+		// Skip non-IAM resources and explicit DENY policies/statements (where wildcards are allowed)
+		if !isIAMResource(rc.Type) || strings.Contains(strings.ToLower(rc.Type), "deny") {
 			continue
 		}
 
 		after := rc.Change.After
 		if after == nil {
+			continue
+		}
+
+		// Bypass explicit DENY rules (e.g. rule_type = "deny")
+		if ruleType := getStringVal(after, "rule_type"); strings.EqualFold(ruleType, "deny") {
 			continue
 		}
 
