@@ -16,13 +16,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"testing"
 	"time"
 
 	"github.com/cucumber/godog"
-	"github.com/gruntwork-io/terratest/modules/terraform"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
@@ -67,7 +63,7 @@ func (c *bddContext) registerEncryptionInTransitSteps(sc *godog.ScenarioContext)
 }
 
 // -----------------------------------------------------------------------------
-// Shared handler functions (used by both BDD and Terratest)
+// Step handler functions
 // -----------------------------------------------------------------------------
 
 func (c *bddContext) verifyHTTPSServiceInUse() error {
@@ -265,58 +261,6 @@ func (c *bddContext) listCloudSQLInstances() ([]*sqladmin.DatabaseInstance, erro
 }
 
 // -----------------------------------------------------------------------------
-// Standalone Terratest (TestEncryptionInTransit)
-// Reuses the same BDD handler functions above — zero duplicated logic.
-// -----------------------------------------------------------------------------
-
-func TestEncryptionInTransit(t *testing.T) {
-	t.Parallel()
-
-	projectID := resolveProjectID()
-	require.NotEmpty(t, projectID, "set GOOGLE_CLOUD_PROJECT or PROJECT_ID")
-
-	accessToken := resolveAccessToken()
-	require.NotEmpty(t, accessToken, "set GOOGLE_CREDENTIALS or GOOGLE_OAUTH_ACCESS_TOKEN")
-
-	terraformOptions := &terraform.Options{
-		TerraformDir: resolveTerraformDir(),
-		NoColor:      true,
-	}
-	defer terraform.Destroy(t, terraformOptions)
-	_, err := terraform.InitAndApplyE(t, terraformOptions)
-	require.NoError(t, err, "terraform apply failed")
-
-	dashboardURL := terraform.Output(t, terraformOptions, "dashboard_url")
-	require.NotEmpty(t, dashboardURL, "dashboard_url output should not be empty")
-
-	// Reuse BDD handler functions via a shared bddContext
-	ctx := &bddContext{projectID: projectID, t: t}
-
-	t.Run("tls_1_2_enforced", func(t *testing.T) {
-		assert.NoError(t, ctx.verifyHTTPSServiceInUse())
-		assert.NoError(t, ctx.verifyTLSVersion12OrHigher())
-	})
-
-	t.Run("legacy_protocols_rejected", func(t *testing.T) {
-		assert.NoError(t, ctx.verifyLegacyProtocolsDisabled())
-	})
-
-	t.Run("service_to_service_tls", func(t *testing.T) {
-		assert.NoError(t, ctx.verifyDataTransmissionTLS())
-	})
-
-	t.Run("load_balancer_ssl_policy", func(t *testing.T) {
-		assert.NoError(t, ctx.verifyLoadBalancerSSLPolicy())
-	})
-
-	t.Run("database_tls", func(t *testing.T) {
-		assert.NoError(t, ctx.verifyDatabaseTLSRequired())
-		assert.NoError(t, ctx.verifyDatabaseSSLModeEnforced())
-		assert.NoError(t, ctx.verifyDatabaseMinTLSVersion())
-	})
-}
-
-// -----------------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------------
 
@@ -327,20 +271,4 @@ func resolveAccessToken() string {
 		}
 	}
 	return ""
-}
-
-func resolveProjectID() string {
-	for _, k := range []string{"GOOGLE_CLOUD_PROJECT", "PROJECT_ID"} {
-		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-func resolveTerraformDir() string {
-	if dir := strings.TrimSpace(os.Getenv("SECURITY_IF_011_TF_DIR")); dir != "" {
-		return dir
-	}
-	return "../examples/monitoring_dashboard"
 }
