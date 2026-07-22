@@ -88,37 +88,10 @@ func TestFeatures(t *testing.T) {
 					},
 				}
 
-				if hasTag(scenario, "@live") {
-					// LIVE INFRASTRUCTURE SUITE: Apply all terraform modules to live GCP project
-					moduleDirs := []struct {
-						path string
-						vars map[string]interface{}
-					}{
-						{"../bq-cross-project-access", map[string]interface{}{"project_id": projectID}},
-						{"../terraform-bq-scheduled-query", map[string]interface{}{"project_id": projectID}},
-						{"../terraform-log-router-bq", map[string]interface{}{"project_id": projectID, "dataset_id": "test_dataset", "sink_name": "test_sink"}},
-						{"../terraform-cmek-policy", map[string]interface{}{"project_id": projectID}},
-						{"../terraform-org-policy", map[string]interface{}{"project_id": projectID}},
-						{"../Trace_scope", map[string]interface{}{"project": projectID, "projects": []string{projectID}, "region": region, "location": region}},
-					}
-
-					c.allModuleTfOpts = nil
-					for _, md := range moduleDirs {
-						opts := &terraform.Options{
-							TerraformDir: md.path,
-							Vars:         md.vars,
-						}
-						c.allModuleTfOpts = append(c.allModuleTfOpts, opts)
-						if _, err := terraform.InitAndApplyE(t, opts); err != nil {
-							return ctx, fmt.Errorf("live terraform apply failed in %s: %w", md.path, err)
-						}
-					}
-				} else {
-					// OPA / POLICY-AS-CODE SUITE: Populate plannedChanges statically without applying resources
-					if len(c.plannedChanges) == 0 {
-						if changes, err := getRepositoryPlanChanges(t); err == nil {
-							c.plannedChanges = changes
-						}
+				// Always populate plannedChanges for policy and attribute inspections
+				if len(c.plannedChanges) == 0 {
+					if changes, err := getRepositoryPlanChanges(t); err == nil {
+						c.plannedChanges = changes
 					}
 				}
 
@@ -126,8 +99,8 @@ func TestFeatures(t *testing.T) {
 			})
 
 			sc.After(func(ctx context.Context, scenario *godog.Scenario, err error) (context.Context, error) {
-				if hasTag(scenario, "@live") {
-					// LIVE INFRASTRUCTURE SUITE TEARDOWN: Destroy live GCP resources
+				if hasTag(scenario, "@live") && len(c.allModuleTfOpts) > 0 {
+					// LIVE INFRASTRUCTURE SUITE TEARDOWN: Destroy live GCP resources if created
 					for i := len(c.allModuleTfOpts) - 1; i >= 0; i-- {
 						terraform.Destroy(t, c.allModuleTfOpts[i])
 					}

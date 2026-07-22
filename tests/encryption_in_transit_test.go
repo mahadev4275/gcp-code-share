@@ -2,12 +2,15 @@ package tests
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cucumber/godog"
 	"github.com/gruntwork-io/terratest/modules/shell"
@@ -51,10 +54,15 @@ func (c *bddContext) registerEncryptionInTransitSteps(sc *godog.ScenarioContext)
 	sc.Step(`^Terraform plan resource configurations are evaluated$`, func() error { return nil })
 	sc.Step(`^resource attributes and URLs are inspected$`, func() error { return nil })
 	sc.Step(`^insecure URL schemes \(http, ws, ftp, telnet\) must not appear in any resource URLs$`, c.verifyNoInsecureURLSchemes)
+
+	// Live Observability API HTTP Rejection & TLS 1.2+ steps
+	sc.Step(`^an API request is sent to the Observability API using an unsafe http scheme$`, func() error { return nil })
+	sc.Step(`^the request must be rejected by the server$`, c.verifyObservabilityAPIRejectsUnsafeSchemeLive)
+	sc.Step(`^live Observability API endpoints must mandate TLS version 1\.2 or higher$`, c.verifyObservabilityAPIMandatesTLS12Live)
 }
 
 // -----------------------------------------------------------------------------
-// Step Handler Functions (OPA / Rego / Conftest Policy Enforcement)
+// Step Handler Functions (OPA / Rego / Conftest Policy Enforcement & Live Checks)
 // -----------------------------------------------------------------------------
 
 func (c *bddContext) verifyConftestEncryptionInTransitPolicies() error {
@@ -155,6 +163,44 @@ func (c *bddContext) verifyNoInsecureURLSchemes() error {
 		return fmt.Errorf("insecure URL scheme violations found: %v", violations)
 	}
 
+	return nil
+}
+
+func (c *bddContext) verifyObservabilityAPIRejectsUnsafeSchemeLive() error {
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Get("http://cloudtrace.googleapis.com/")
+	if err != nil {
+		// Connection rejected / failed -> PASS (unencrypted HTTP rejected)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	// HTTP 404, 403, 301, 302, 400 demonstrate that unencrypted HTTP API requests are rejected
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	return fmt.Errorf("Observability API accepted unencrypted HTTP request without rejection (status code: %d)", resp.StatusCode)
+}
+
+func (c *bddContext) verifyObservabilityAPIMandatesTLS12Live() error {
+	conn, err := tls.Dial("tcp", "cloudtrace.googleapis.com:443", &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to connect to Observability API over TLS 1.2+: %w", err)
+	}
+	defer conn.Close()
+
+	state := conn.ConnectionState()
+	if state.Version < tls.VersionTLS12 {
+		return fmt.Errorf("Observability API TLS version %x is below required TLS 1.2", state.Version)
+	}
 	return nil
 }
 

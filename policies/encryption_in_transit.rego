@@ -115,3 +115,29 @@ get_insecure_scheme(str) = "http://" if startswith(lower(str), "http://")
 get_insecure_scheme(str) = "ws://" if startswith(lower(str), "ws://")
 get_insecure_scheme(str) = "ftp://" if startswith(lower(str), "ftp://")
 get_insecure_scheme(str) = "telnet://" if startswith(lower(str), "telnet://")
+
+# -----------------------------------------------------------------------------
+# 5. Observability & API Endpoint Scheme & TLS 1.2+ Policy
+# -----------------------------------------------------------------------------
+
+# Reject HTTP scheme or insecure endpoints for Observability & API resources
+deny contains msg if {
+	some resource in input.resource_changes
+	is_observability_api_resource(resource.type)
+
+	scheme := get_insecure_scheme(resource.change.after.url)
+	scheme != ""
+
+	msg := sprintf("Security violation: Observability API endpoint '%v' uses unsafe scheme '%v' (must be https:// with TLS 1.2+)", [resource.address, scheme])
+}
+
+is_observability_api_resource(res_type) if {
+	contains(res_type, "api_gateway")
+}
+is_observability_api_resource(res_type) if {
+	contains(res_type, "endpoints_service")
+}
+is_observability_api_resource(res_type) if {
+	contains(res_type, "cloud_run")
+}
+
