@@ -237,6 +237,11 @@ func isVendorManagedControlPlaneRole(role string) bool {
 		}
 	}
 
+	// Data-plane roles (e.g. BigQuery data access) are not control-plane roles.
+	if roleLower == "roles/bigquery.dataeditor" || roleLower == "roles/bigquery.dataviewer" {
+		return false
+	}
+
 	// Only predefined roles (roles/<service>.<name>) are in scope beyond here.
 	if !predefinedRoleRe.MatchString(role) {
 		return false

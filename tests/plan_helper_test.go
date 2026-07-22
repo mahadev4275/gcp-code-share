@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/terraform"
@@ -26,6 +27,12 @@ type PlanResourceChange struct {
 type PlanJSON struct {
 	ResourceChanges []PlanResourceChange `json:"resource_changes"`
 }
+
+var (
+	repoPlanChangesOnce sync.Once
+	cachedPlanChanges   []PlanResourceChange
+	cachedPlanErr       error
+)
 
 func getPlanResourceChanges(t *testing.T, dir string, vars map[string]interface{}) ([]PlanResourceChange, error) {
 	tfOpts := &terraform.Options{
@@ -76,78 +83,82 @@ func getPlanResourceChanges(t *testing.T, dir string, vars map[string]interface{
 	return plan.ResourceChanges, nil
 }
 
-// getRepositoryPlanChanges runs terraform plan on all modules in the repository
+// getRepositoryPlanChanges runs terraform plan on all modules in the repository with sync.Once caching
 func getRepositoryPlanChanges(t *testing.T) ([]PlanResourceChange, error) {
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if projectID == "" {
-		projectID = os.Getenv("PROJECT_ID")
-	}
-	if projectID == "" {
-		projectID = "mock-project-id"
-	}
-
-	region := os.Getenv("GOOGLE_CLOUD_REGION")
-	if region == "" {
-		region = "us-central1"
-	}
-
-	dirs := []struct {
-		path string
-		vars map[string]interface{}
-	}{
-		{
-			path: "../bq-cross-project-access",
-			vars: map[string]interface{}{
-				"project_id": projectID,
-			},
-		},
-		{
-			path: "../terraform-bq-scheduled-query",
-			vars: map[string]interface{}{
-				"project_id": projectID,
-			},
-		},
-		{
-			path: "../terraform-log-router-bq",
-			vars: map[string]interface{}{
-				"project_id": projectID,
-				"dataset_id": "test_dataset",
-				"sink_name":  "test_sink",
-			},
-		},
-		{
-			path: "../terraform-cmek-policy",
-			vars: map[string]interface{}{
-				"project_id": projectID,
-			},
-		},
-		{
-			path: "../terraform-org-policy",
-			vars: map[string]interface{}{
-				"project_id": projectID,
-			},
-		},
-		{
-			path: "../Trace_scope",
-			vars: map[string]interface{}{
-				"project":  projectID,
-				"projects": []string{projectID},
-				"region":   region,
-				"location": region,
-			},
-		},
-	}
-
-	var allChanges []PlanResourceChange
-	for _, d := range dirs {
-		changes, err := getPlanResourceChanges(t, d.path, d.vars)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get plan changes for %s: %w", d.path, err)
+	repoPlanChangesOnce.Do(func() {
+		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+		if projectID == "" {
+			projectID = os.Getenv("PROJECT_ID")
 		}
-		allChanges = append(allChanges, changes...)
-	}
+		if projectID == "" {
+			projectID = "mock-project-id"
+		}
 
-	return allChanges, nil
+		region := os.Getenv("GOOGLE_CLOUD_REGION")
+		if region == "" {
+			region = "us-central1"
+		}
+
+		dirs := []struct {
+			path string
+			vars map[string]interface{}
+		}{
+			{
+				path: "../bq-cross-project-access",
+				vars: map[string]interface{}{
+					"project_id": projectID,
+				},
+			},
+			{
+				path: "../terraform-bq-scheduled-query",
+				vars: map[string]interface{}{
+					"project_id": projectID,
+				},
+			},
+			{
+				path: "../terraform-log-router-bq",
+				vars: map[string]interface{}{
+					"project_id": projectID,
+					"dataset_id": "test_dataset",
+					"sink_name":  "test_sink",
+				},
+			},
+			{
+				path: "../terraform-cmek-policy",
+				vars: map[string]interface{}{
+					"project_id": projectID,
+				},
+			},
+			{
+				path: "../terraform-org-policy",
+				vars: map[string]interface{}{
+					"project_id": projectID,
+				},
+			},
+			{
+				path: "../Trace_scope",
+				vars: map[string]interface{}{
+					"project":  projectID,
+					"projects": []string{projectID},
+					"region":   region,
+					"location": region,
+				},
+			},
+		}
+
+		var allChanges []PlanResourceChange
+		for _, d := range dirs {
+			changes, err := getPlanResourceChanges(t, d.path, d.vars)
+			if err != nil {
+				cachedPlanErr = fmt.Errorf("failed to get plan changes for %s: %w", d.path, err)
+				return
+			}
+			allChanges = append(allChanges, changes...)
+		}
+		cachedPlanChanges = allChanges
+	})
+
+	return cachedPlanChanges, cachedPlanErr
 }
 
 func isIAMResource(resourceType string) bool {

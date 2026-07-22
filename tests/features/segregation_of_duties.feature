@@ -1,4 +1,4 @@
-@segregation_of_duties
+@opa @segregation_of_duties
 Feature: Segregation of Duties
   As a GCP security administrator
   I want to enforce segregation of duties in IAM policies

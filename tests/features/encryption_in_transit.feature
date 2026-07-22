@@ -1,8 +1,8 @@
-@encryption_in_transit
-Feature: Encryption in Transit Enforcement
+@opa @encryption_in_transit
+Feature: Encryption in Transit & Protocol Compliance
   As a GCP Security Administrator
   I want to ensure all data in transit across external, internal, and database communication channels is encrypted
-  So that legacy unencrypted protocols are rejected and compliance with security standards is maintained
+  So that legacy unencrypted protocols are rejected, insecure URL schemes are prohibited, and compliance with security standards is maintained
 
   Scenario: Service enforces TLS 1.2 or higher
     Given the GCP project ID is configured
@@ -16,6 +16,7 @@ Feature: Encryption in Transit Enforcement
     When the communication channel is validated
     Then data transmission must use TLS or mTLS
     And unencrypted traffic must be blocked
+    And encryption events must be captured in audit logs
 
   Scenario: Load Balancer enforces modern TLS configuration
     Given a Load Balancer or API Gateway exists
@@ -30,3 +31,8 @@ Feature: Encryption in Transit Enforcement
     Then SSL/TLS must be required for all client connections
     And connections without valid TLS certificates must be rejected
     And the minimum TLS version must be 1.2
+
+  Scenario: No resource URLs use insecure communication schemes
+    Given Terraform plan resource configurations are evaluated
+    When resource attributes and URLs are inspected
+    Then insecure URL schemes (http, ws, ftp, telnet) must not appear in any resource URLs

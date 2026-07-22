@@ -1,4 +1,4 @@
-@encryption_compliance
+@live @encryption_compliance
 Feature: Encryption Compliance — Key Management Standard
   As a Security Administrator
   I want to ensure all encryption implementations comply with the corporate Key Management Standard

@@ -1,4 +1,4 @@
-@cmek 
+@live @cmek
 Feature: CMEK Policy for Infrastructure Data at Rest
 
   As a Security Administrator,

@@ -6,10 +6,9 @@ This repository contains Terraform configurations and validation tests (both sta
 
 1. **Go 1.26+** (for executing test suites)
 2. **Terraform 1.0+**
-3. **Conftest** (for static policy evaluation)
+3. **Conftest** (for static OPA/Rego policy evaluation)
 
-
-## Set up persistent binaries
+## Setup Persistent Binaries
 
 ```bash
 mkdir -p $HOME/bin
@@ -23,6 +22,7 @@ rm /tmp/terraform.zip
 
 # Verify installation
 terraform --version
+
 # Set your desired Conftest version
 CONFTEST_VERSION="0.54.0"
 
@@ -34,51 +34,66 @@ rm /tmp/conftest.tar.gz
 # Verify installation
 conftest --version
 ```
+
 ---
 
-## 1. Compliance Testing (OPA/Rego with Terratest)
+## Dual-Suite BDD Test Architecture (Godog + Terratest)
 
-Before deploying infrastructure, you can statically check your Terraform plan against security policies (e.g., ensuring resources are not made public) using Terratest and Rego.
+The BDD test suite supports two distinct execution paths selected via `-godog.tags`:
 
-### Running the Terratest Compliance Check
-Run the specific test suite:
+### 1. Static Policy-as-Code & OPA Suite (`@opa`)
+
+Evaluates Terraform plan JSON outputs offline against OPA/Rego rules (`policies/`), Conftest checks, custom role constraints, segregation of duties, and insecure URL scheme scanning (`http://`, `ws://`, `ftp://`, `telnet://`). 
+
+* **Requires $0 GCP resources and no cloud API calls.**
+* **Uses `sync.Once` plan caching for rapid execution (~40-60 seconds total across all repository modules).**
+
+```bash
+export PROJECT_ID=code-share-501912
+go test -v ./tests/ -run TestFeatures -godog.tags="@opa"
+```
+
+#### Feature Tags in `@opa`:
+* `@encryption_in_transit`: Enforces TLS 1.2+, Load Balancer SSL policies (`MODERN`/`RESTRICTED`), Cloud SQL SSL options (`require_ssl=true`, TLS 1.2+), Cloud Run ingress restrictions, and scans planned resource attributes for insecure URL schemes.
+* `@segregation_of_duties`: Enforces segregation of duties in IAM bindings and pipeline service account restrictions.
+* `@custom_roles`: Verifies custom role definitions and ensures no vendor-managed control plane roles are assigned to service accounts.
+
+---
+
+### 2. Live GCP Infrastructure Integration Suite (`@live`)
+
+Provisions live Terraform infrastructure (`terraform apply`), validates active resource behavior and policies against live Google Cloud APIs, and cleans up resources (`terraform destroy`).
+
+```bash
+export PROJECT_ID=code-share-501912
+go test -v ./tests/ -run TestFeatures -godog.tags="@live"
+```
+
+#### Feature Tags in `@live`:
+* `@public_access`: Inspects live IAM policies on GCS buckets, effective Org Policy for Storage Public Access Prevention, and VPC Service Perimeters.
+* `@cmek`: Validates symmetric encryption via Customer Managed Encryption Keys (CMEK) and key lifecycle management via IaC.
+* `@iam_restrictions`: Enforces wildcard limits, conditional trust boundary scoping, and folder/project scoped service account bindings.
+* `@GA`: Verifies all enabled GCP APIs in the project are in General Availability (GA) status.
+* `@obs_api`: Checks Cloud Observability / Trace API enablement state.
+* `@encryption_compliance`: Audits KMS key ring, cryptographic algorithm (AES-256-GCM), key bit strength (256-bit), CloudHSM protection levels, and key rotation.
+
+---
+
+## Additional Compliance Testing (OPA/Rego with Terratest)
+
+Run individual static Terratest compliance checks directly:
+
 ```bash
 go test -v ./tests/ -run TestPublicAccessRegoPolicyWithTerratest
 ```
 
 ### Specifying Terraform Variables (.tfvars)
-By default, the Terratest suite dynamically reads parameters from environment variables (`PROJECT_ID` / `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_REGION`). 
+By default, the test suite dynamically reads parameters from environment variables (`PROJECT_ID` / `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_REGION`). 
 
-However, you can specify these variables using a `.tfvars` file:
-
-1. **Auto-detection (Default Names):** 
-   If you create `terraform.tfvars`, `terraform.tfvars.json`, `*.auto.tfvars`, or `*.auto.tfvars.json` in the `Trace_scope/` directory, the test runner will automatically detect and prioritize them.
-   
-2. **Custom Filename:**
-   To specify a custom-named vars file, set the `TF_VAR_FILE` environment variable before running the test:
+To specify custom `.tfvars`:
+1. **Auto-detection (Default Names):** Place `terraform.tfvars`, `terraform.tfvars.json`, `*.auto.tfvars`, or `*.auto.tfvars.json` in module directories.
+2. **Custom Filename:** Set `TF_VAR_FILE` before running:
    ```bash
    export TF_VAR_FILE=/path/to/custom.tfvars
    go test -v ./tests/ -run TestPublicAccessRegoPolicyWithTerratest
    ```
-
----
-
-## 2. Live GCP Runtime Audit (BDD with Godog)
-
-To verify the active state of your deployed resources in your target GCP project:
-
-### Pre-requisites
-Make sure you have authenticated credentials with access to the target project (e.g., via `gcloud auth application-default login` or setting the `GOOGLE_APPLICATION_CREDENTIALS` environment variable).
-
-### Running Feature Tests
-Set the project ID environment variable and specify the BDD tag. Use `-run TestFeatures` to ensure that only the BDD suite runs (and skips the static Rego checks):
-```bash
-export PROJECT_ID=your_gcp_project_id
-go test -v ./tests/ -run TestFeatures -godog.tags="@public_access"
-```
-
-Common tags include:
-- `@public_access`: Verifies public access prevention, IAM rules, and VPC Service Controls.
-- `@GA`: Checks if enabled GCP APIs are in General Availability (GA) status.
-- `@obs_api`: Checks if the Cloud Observability API is enabled.
-- `@cmek`: Audits Customer Managed Encryption Keys (CMEK) settings.

@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/cucumber/godog"
@@ -21,6 +20,7 @@ type bddContext struct {
 	serviceNameToVersions map[string][]string
 	traceServiceState     string
 	tfOpts                *terraform.Options
+	allModuleTfOpts       []*terraform.Options
 	t                     *testing.T
 	plannedChanges        []PlanResourceChange
 }
@@ -35,6 +35,15 @@ func (c *bddContext) theGCPProjectIDIsConfigured() error {
 	}
 	c.projectID = projectID
 	return nil
+}
+
+func hasTag(scenario *godog.Scenario, tag string) bool {
+	for _, t := range scenario.Tags {
+		if t.Name == tag {
+			return true
+		}
+	}
+	return false
 }
 
 func TestFeatures(t *testing.T) {
@@ -56,70 +65,71 @@ func TestFeatures(t *testing.T) {
 			c.registerEncryptionInTransitSteps(sc)
 			c.registerEncryptionComplianceSteps(sc)
 
-
 			// Register Terratest lifecycle hooks
 			sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
-				// Populate project ID from environment
 				projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
 				if projectID == "" {
 					projectID = os.Getenv("PROJECT_ID")
 				}
 				c.projectID = projectID
 
-				// Setup target directory
-				terraformDir := "../Trace_scope"
+				region := os.Getenv("GOOGLE_CLOUD_REGION")
+				if region == "" {
+					region = "us-central1"
+				}
+
 				c.tfOpts = &terraform.Options{
-					TerraformDir: terraformDir,
+					TerraformDir: "../Trace_scope",
+					Vars: map[string]interface{}{
+						"project":  projectID,
+						"region":   region,
+						"location": region,
+						"projects": []string{projectID},
+					},
 				}
 
-				// Check for TF_VAR_FILE
-				tfVarFile := os.Getenv("TF_VAR_FILE")
-				if tfVarFile != "" {
-					c.tfOpts.VarFiles = []string{tfVarFile}
+				if hasTag(scenario, "@live") {
+					// LIVE INFRASTRUCTURE SUITE: Apply all terraform modules to live GCP project
+					moduleDirs := []struct {
+						path string
+						vars map[string]interface{}
+					}{
+						{"../bq-cross-project-access", map[string]interface{}{"project_id": projectID}},
+						{"../terraform-bq-scheduled-query", map[string]interface{}{"project_id": projectID}},
+						{"../terraform-log-router-bq", map[string]interface{}{"project_id": projectID, "dataset_id": "test_dataset", "sink_name": "test_sink"}},
+						{"../terraform-cmek-policy", map[string]interface{}{"project_id": projectID}},
+						{"../terraform-org-policy", map[string]interface{}{"project_id": projectID}},
+						{"../Trace_scope", map[string]interface{}{"project": projectID, "projects": []string{projectID}, "region": region, "location": region}},
+					}
+
+					c.allModuleTfOpts = nil
+					for _, md := range moduleDirs {
+						opts := &terraform.Options{
+							TerraformDir: md.path,
+							Vars:         md.vars,
+						}
+						c.allModuleTfOpts = append(c.allModuleTfOpts, opts)
+						if _, err := terraform.InitAndApplyE(t, opts); err != nil {
+							return ctx, fmt.Errorf("live terraform apply failed in %s: %w", md.path, err)
+						}
+					}
 				} else {
-					// Check for default tfvars files
-					hasTfvars := false
-					if _, err := os.Stat(filepath.Join(terraformDir, "terraform.tfvars")); err == nil {
-						hasTfvars = true
-					} else if _, err := os.Stat(filepath.Join(terraformDir, "terraform.tfvars.json")); err == nil {
-						hasTfvars = true
-					}
-
-					// Fallback to env vars if no tfvars files
-					if !hasTfvars {
-						projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-						if projectID == "" {
-							projectID = os.Getenv("PROJECT_ID")
-						}
-						region := os.Getenv("GOOGLE_CLOUD_REGION")
-						if region == "" {
-							region = "us-central1"
-						}
-
-						c.tfOpts.Vars = map[string]interface{}{
-							"project":  projectID,
-							"region":   region,
-							"location": region,
-							"projects": []string{projectID},
+					// OPA / POLICY-AS-CODE SUITE: Populate plannedChanges statically without applying resources
+					if len(c.plannedChanges) == 0 {
+						if changes, err := getRepositoryPlanChanges(t); err == nil {
+							c.plannedChanges = changes
 						}
 					}
-				}
-
-				// Run Terraform Init and Apply
-				t.Logf("Running terraform init and apply for scenario: %s", scenario.Name)
-				if _, err := terraform.InitAndApplyContextE(t, ctx, c.tfOpts); err != nil {
-					return ctx, fmt.Errorf("terraform apply failed: %w", err)
 				}
 
 				return ctx, nil
 			})
 
 			sc.After(func(ctx context.Context, scenario *godog.Scenario, err error) (context.Context, error) {
-				// Run Terraform Destroy to clean up resources
-				if c.tfOpts != nil {
-					t.Logf("Running terraform destroy for scenario: %s", scenario.Name)
-					if _, destErr := terraform.DestroyContextE(t, ctx, c.tfOpts); destErr != nil {
-						t.Errorf("terraform destroy failed: %v", destErr)
+				if hasTag(scenario, "@live") {
+					// LIVE INFRASTRUCTURE SUITE TEARDOWN: Destroy live GCP resources
+					for i := len(c.allModuleTfOpts) - 1; i >= 0; i-- {
+						terraform.Destroy(t, c.allModuleTfOpts[i])
 					}
 				}
 				return ctx, nil
