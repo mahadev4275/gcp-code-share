@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 )
 
@@ -38,6 +39,9 @@ func getPlanResourceChanges(t *testing.T, dir string, vars map[string]interface{
 	tfOpts := &terraform.Options{
 		TerraformDir: dir,
 		Vars:         vars,
+	}
+	if isTFQuiet() {
+		tfOpts.Logger = logger.Discard
 	}
 
 	planFile := filepath.Join(dir, "tfplan-"+filepath.Base(dir))

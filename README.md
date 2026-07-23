@@ -46,6 +46,25 @@ The BDD test suite automatically discovers all Terraform modules in subdirectori
 * **Cached Static Plans**: Static plan evaluation (`@opa`) runs across all discovered modules using a `sync.Once` cache, completing in **~14 seconds** without deploying live GCP infrastructure.
 * **One-Time Live Setup/Teardown**: When running live scenarios (`@live`), infrastructure across all discovered Terraform modules is provisioned **once per test run** (rather than per scenario) and cleanly destroyed upon suite completion.
 
+### Controlling Terraform CLI Output & Logging
+By default, verbose Terraform CLI logs (`terraform init`, `plan`, `apply`, `destroy`) are suppressed so that Godog Gherkin scenarios and pass/fail summaries are displayed cleanly.
+
+You can control Terraform logging per test run via CLI flag or environment variable:
+
+* **Default (Quiet Mode - Clean Godog Output)**:
+  ```bash
+  go test -v ./tests/ -run TestFeatures -godog.tags="@opa"
+  ```
+* **Verbose Mode (View Full Terraform CLI Output for Debugging)**:
+  - **Via CLI flag**:
+    ```bash
+    go test -v ./tests/ -run TestFeatures -godog.tags="@opa" -tf.quiet=false
+    ```
+  - **Via environment variable**:
+    ```bash
+    TF_QUIET=false go test -v ./tests/ -run TestFeatures -godog.tags="@live"
+    ```
+
 ### 1. Static Policy-as-Code & OPA Suite (`@opa`)
 
 Evaluates Terraform plan JSON outputs offline against OPA/Rego rules (`policies/`), Conftest checks, custom role constraints, segregation of duties, and insecure URL scheme scanning (`http://`, `ws://`, `ftp://`, `telnet://`). 

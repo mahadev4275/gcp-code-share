@@ -9,16 +9,28 @@ import (
 	"testing"
 
 	"github.com/cucumber/godog"
+	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 )
 
 var (
 	godogTags         = flag.String("godog.tags", "", "filter scenarios by tags")
+	tfQuietFlag       = flag.Bool("tf.quiet", true, "suppress verbose Terraform CLI output (default true; set -tf.quiet=false to view Terraform logs)")
 	liveInfraOnce     sync.Once
 	liveModuleOptsMap = make(map[string]*terraform.Options)
 	liveModuleOpts    []*terraform.Options
 	liveInfraSetupErr error
 )
+
+func isTFQuiet() bool {
+	if v := os.Getenv("TF_QUIET"); v != "" {
+		return v != "false" && v != "0"
+	}
+	if tfQuietFlag != nil {
+		return *tfQuietFlag
+	}
+	return true
+}
 
 // ensureLiveInfraProvisioned dynamically discovers and provisions all repository Terraform modules ONCE per test run
 func ensureLiveInfraProvisioned(t *testing.T) error {
@@ -58,6 +70,9 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			opts := &terraform.Options{
 				TerraformDir: modPath,
 				Vars:         commonVars,
+			}
+			if isTFQuiet() {
+				opts.Logger = logger.Discard
 			}
 			t.Logf(">>> Applying Terraform module: %s", modPath)
 			if _, err := terraform.InitAndApplyE(t, opts); err != nil {
@@ -166,6 +181,9 @@ func TestFeatures(t *testing.T) {
 							"location": region,
 							"projects": []string{projectID},
 						},
+					}
+					if isTFQuiet() {
+						c.tfOpts.Logger = logger.Discard
 					}
 				}
 
