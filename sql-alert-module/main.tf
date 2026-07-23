@@ -11,7 +11,7 @@ module "sql_alert" {
 
   alert_name = "Critical Error Logs Alert"
 
-  notification_email = "aman.rastogi01@infosys.com"
+  notification_email = "aman92121rastogi@gmail.com"
 
   query = <<EOF
 SELECT *
