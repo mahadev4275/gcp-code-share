@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -34,6 +35,13 @@ func isTFQuiet() bool {
 	return true
 }
 
+func cleanStaleStateFiles(dirs []string) {
+	for _, dir := range dirs {
+		_ = os.Remove(filepath.Join(dir, "terraform.tfstate"))
+		_ = os.Remove(filepath.Join(dir, "terraform.tfstate.backup"))
+	}
+}
+
 // ensureLiveInfraProvisioned dynamically discovers and provisions all repository Terraform modules ONCE per test run
 func ensureLiveInfraProvisioned(t *testing.T) error {
 	liveInfraOnce.Do(func() {
@@ -56,6 +64,9 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			liveInfraSetupErr = fmt.Errorf("failed to dynamically discover terraform module directories: %w", err)
 			return
 		}
+
+		// Clean up any stale local terraform state files from interrupted previous test runs
+		cleanStaleStateFiles(dirs)
 
 		// Ensure dataset creation modules (e.g. log-router) apply before dataset access binding modules (e.g. bq-cross-project-access)
 		sort.Slice(dirs, func(i, j int) bool {
@@ -96,12 +107,15 @@ func teardownLiveInfra(t *testing.T) {
 		return
 	}
 	t.Log(">>> [ONE-TIME TEARDOWN] Destroying all provisioned live infrastructure modules...")
+	var dirs []string
 	for i := len(liveModuleOpts) - 1; i >= 0; i-- {
+		dirs = append(dirs, liveModuleOpts[i].TerraformDir)
 		t.Logf(">>> Destroying Terraform module: %s", liveModuleOpts[i].TerraformDir)
 		if _, err := terraform.DestroyE(t, liveModuleOpts[i]); err != nil {
 			t.Errorf("failed to destroy terraform module %s: %v", liveModuleOpts[i].TerraformDir, err)
 		}
 	}
+	cleanStaleStateFiles(dirs)
 	liveModuleOpts = nil
 	liveModuleOptsMap = make(map[string]*terraform.Options)
 }
