@@ -9,8 +9,8 @@ variable "projects" {
 
 variable "region" {
   type = string
+  
 }
-
 variable "location" {
   type = string
 }
