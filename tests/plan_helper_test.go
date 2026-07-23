@@ -154,6 +154,23 @@ func getDeclaredVariablesInDir(dir string) map[string]bool {
 	return declared
 }
 
+// detectVarFiles checks for terraform.tfvars or *.auto.tfvars files in dir
+func detectVarFiles(dir string) []string {
+	var varFiles []string
+	candidates := []string{"terraform.tfvars", "terraform.tfvars.json"}
+	for _, c := range candidates {
+		path := filepath.Join(dir, c)
+		if _, err := os.Stat(path); err == nil {
+			varFiles = append(varFiles, path)
+		}
+	}
+	autoFiles, _ := filepath.Glob(filepath.Join(dir, "*.auto.tfvars"))
+	varFiles = append(varFiles, autoFiles...)
+	autoJSONFiles, _ := filepath.Glob(filepath.Join(dir, "*.auto.tfvars.json"))
+	varFiles = append(varFiles, autoJSONFiles...)
+	return varFiles
+}
+
 // buildVarsForModule filters variable assignments to ONLY include variables declared by the target module
 func buildVarsForModule(dir, projectID, region string) map[string]interface{} {
 	declared := getDeclaredVariablesInDir(dir)
@@ -162,7 +179,7 @@ func buildVarsForModule(dir, projectID, region string) map[string]interface{} {
 		"project":        projectID,
 		"projects":       []string{projectID},
 		"region":         region,
-		"location":       region,
+		"location":       "global",
 		"dataset_id":     "test_dataset",
 		"sink_name":      "test_sink",
 		"bucket_id":      "test_bucket",

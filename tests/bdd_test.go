@@ -60,6 +60,7 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			opts := &terraform.Options{
 				TerraformDir: modPath,
 				Vars:         buildVarsForModule(modPath, projectID, region),
+				VarFiles:     detectVarFiles(modPath),
 			}
 			if isTFQuiet() {
 				opts.Logger = logger.Discard
@@ -168,9 +169,10 @@ func TestFeatures(t *testing.T) {
 						Vars: map[string]interface{}{
 							"project":  projectID,
 							"region":   region,
-							"location": region,
+							"location": "global",
 							"projects": []string{projectID},
 						},
+						VarFiles: detectVarFiles("../Trace_scope"),
 					}
 					if isTFQuiet() {
 						c.tfOpts.Logger = logger.Discard
