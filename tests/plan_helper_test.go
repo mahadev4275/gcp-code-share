@@ -180,7 +180,7 @@ func buildVarsForModule(dir, projectID, region string) map[string]interface{} {
 		"projects":       []string{projectID},
 		"region":         region,
 		"location":       "global",
-		"dataset_id":     "test_dataset",
+		"dataset_id":     "trace_spans",
 		"sink_name":      "test_sink",
 		"bucket_id":      "test_bucket",
 		"link_id":        "test_link",

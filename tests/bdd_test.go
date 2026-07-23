@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"sync"
 	"testing"
 
@@ -54,6 +56,17 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			liveInfraSetupErr = fmt.Errorf("failed to dynamically discover terraform module directories: %w", err)
 			return
 		}
+
+		// Ensure dataset creation modules (e.g. log-router) apply before dataset access binding modules (e.g. bq-cross-project-access)
+		sort.Slice(dirs, func(i, j int) bool {
+			if strings.Contains(dirs[i], "log-router") && strings.Contains(dirs[j], "bq-cross-project-access") {
+				return true
+			}
+			if strings.Contains(dirs[j], "log-router") && strings.Contains(dirs[i], "bq-cross-project-access") {
+				return false
+			}
+			return dirs[i] < dirs[j]
+		})
 
 		t.Log(">>> [ONE-TIME SETUP] Provisioning live infrastructure across dynamically discovered Terraform modules...")
 		for _, modPath := range dirs {
