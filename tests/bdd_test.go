@@ -39,6 +39,7 @@ func cleanStaleStateFiles(dirs []string) {
 	for _, dir := range dirs {
 		_ = os.Remove(filepath.Join(dir, "terraform.tfstate"))
 		_ = os.Remove(filepath.Join(dir, "terraform.tfstate.backup"))
+		_ = os.Remove(filepath.Join(dir, ".terraform.tfstate.lock.info"))
 	}
 }
 
