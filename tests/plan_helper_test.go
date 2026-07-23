@@ -128,6 +128,57 @@ func discoverTerraformModuleDirs(root string) ([]string, error) {
 	return moduleDirs, nil
 }
 
+// getDeclaredVariablesInDir parses root .tf files in dir for variable "name" definitions
+func getDeclaredVariablesInDir(dir string) map[string]bool {
+	declared := make(map[string]bool)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return declared
+	}
+	re := regexp.MustCompile(`variable\s+"([^"]+)"`)
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".tf") {
+			continue
+		}
+		content, err := os.ReadFile(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			continue
+		}
+		matches := re.FindAllStringSubmatch(string(content), -1)
+		for _, m := range matches {
+			if len(m) > 1 {
+				declared[m[1]] = true
+			}
+		}
+	}
+	return declared
+}
+
+// buildVarsForModule filters variable assignments to ONLY include variables declared by the target module
+func buildVarsForModule(dir, projectID, region string) map[string]interface{} {
+	declared := getDeclaredVariablesInDir(dir)
+	allPossible := map[string]interface{}{
+		"project_id":     projectID,
+		"project":        projectID,
+		"projects":       []string{projectID},
+		"region":         region,
+		"location":       region,
+		"dataset_id":     "test_dataset",
+		"sink_name":      "test_sink",
+		"bucket_id":      "test_bucket",
+		"link_id":        "test_link",
+		"retention_days": 30,
+	}
+
+	vars := make(map[string]interface{})
+	for k, v := range allPossible {
+		if declared[k] {
+			vars[k] = v
+		}
+	}
+	return vars
+}
+
 // getRepositoryPlanChanges runs terraform plan on all modules in the repository with sync.Once caching
 func getRepositoryPlanChanges(t *testing.T) ([]PlanResourceChange, error) {
 	repoPlanChangesOnce.Do(func() {
@@ -150,19 +201,10 @@ func getRepositoryPlanChanges(t *testing.T) ([]PlanResourceChange, error) {
 			return
 		}
 
-		commonVars := map[string]interface{}{
-			"project_id": projectID,
-			"project":    projectID,
-			"projects":   []string{projectID},
-			"region":     region,
-			"location":   region,
-			"dataset_id": "test_dataset",
-			"sink_name":  "test_sink",
-		}
-
 		var allChanges []PlanResourceChange
 		for _, dir := range dirs {
-			changes, err := getPlanResourceChanges(t, dir, commonVars)
+			modVars := buildVarsForModule(dir, projectID, region)
+			changes, err := getPlanResourceChanges(t, dir, modVars)
 			if err != nil {
 				cachedPlanErr = fmt.Errorf("failed to get plan changes for %s: %w", dir, err)
 				return

@@ -55,21 +55,11 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			return
 		}
 
-		commonVars := map[string]interface{}{
-			"project_id": projectID,
-			"project":    projectID,
-			"projects":   []string{projectID},
-			"region":     region,
-			"location":   region,
-			"dataset_id": "test_dataset",
-			"sink_name":  "test_sink",
-		}
-
 		t.Log(">>> [ONE-TIME SETUP] Provisioning live infrastructure across dynamically discovered Terraform modules...")
 		for _, modPath := range dirs {
 			opts := &terraform.Options{
 				TerraformDir: modPath,
-				Vars:         commonVars,
+				Vars:         buildVarsForModule(modPath, projectID, region),
 			}
 			if isTFQuiet() {
 				opts.Logger = logger.Discard
