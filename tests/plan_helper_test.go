@@ -112,7 +112,7 @@ func discoverTerraformModuleDirs(root string) ([]string, error) {
 			continue
 		}
 		name := entry.Name()
-		if strings.HasPrefix(name, ".") || name == "tests" || name == "policies" || name == "vendor" {
+		if strings.HasPrefix(name, ".") || name == "tests" || name == "policies" || name == "vendor" || name == "tf_for_scope" {
 			continue
 		}
 
