@@ -9,6 +9,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/cucumber/godog"
 	"github.com/gruntwork-io/terratest/modules/logger"
@@ -113,8 +114,19 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			}
 			t.Logf(">>> Applying Terraform module: %s", modPath)
 			if _, err := terraform.InitAndApplyE(t, opts); err != nil {
-				liveInfraSetupErr = fmt.Errorf("failed to init and apply terraform module %s: %w", modPath, err)
-				return
+				var applyErr error
+				for retry := 1; retry <= 3; retry++ {
+					t.Logf(">>> Retry %d/3 for module %s after transient GCP propagation delay...", retry, modPath)
+					time.Sleep(5 * time.Second)
+					if _, applyErr = terraform.InitAndApplyE(t, opts); applyErr == nil {
+						err = nil
+						break
+					}
+				}
+				if err != nil {
+					liveInfraSetupErr = fmt.Errorf("failed to init and apply terraform module %s: %w", modPath, err)
+					return
+				}
 			}
 			liveModuleOptsMap[modPath] = opts
 			liveModuleOpts = append(liveModuleOpts, opts)
