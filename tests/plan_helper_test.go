@@ -222,11 +222,37 @@ func generateAmalgamatedComposition(root string) (string, error) {
 
 	var sb strings.Builder
 	sb.WriteString(`# System-generated master composition module for BDD test execution
-variable "project_id" { type = string }
-variable "project" { type = string }
-variable "projects" { type = list(string) }
-variable "region" { type = string, default = "us-central1" }
-variable "location" { type = string, default = "global" }
+terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 6.0.0"
+    }
+  }
+}
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+
+variable "project_id" {
+  type = string
+}
+variable "project" {
+  type = string
+}
+variable "projects" {
+  type = list(string)
+}
+variable "region" {
+  type    = string
+  default = "us-central1"
+}
+variable "location" {
+  type    = string
+  default = "global"
+}
 
 `)
 
@@ -240,7 +266,14 @@ variable "location" { type = string, default = "global" }
 		sb.WriteString(fmt.Sprintf("  source = %q\n", relSource))
 
 		if declared["project_id"] {
-			sb.WriteString("  project_id = var.project_id\n")
+			switch base {
+			case "logbucket-bqlink", "terraform-log-router-bq":
+				sb.WriteString("  project_id = module.Trace_scope.trace_scope_id != \"\" ? var.project_id : var.project_id\n")
+			case "bq-cross-project-access", "terraform-bq-scheduled-query":
+				sb.WriteString("  project_id = module.terraform_log_router_bq.sink_name != \"\" ? var.project_id : var.project_id\n")
+			default:
+				sb.WriteString("  project_id = var.project_id\n")
+			}
 		}
 		if declared["project"] {
 			sb.WriteString("  project = var.project\n")
@@ -259,14 +292,6 @@ variable "location" { type = string, default = "global" }
 		}
 		if declared["sink_name"] {
 			sb.WriteString("  sink_name = \"test_sink\"\n")
-		}
-
-		// Express dependencies explicitly for Terraform's DAG engine
-		switch base {
-		case "logbucket-bqlink", "terraform-log-router-bq":
-			sb.WriteString("  depends_on = [module.Trace_scope]\n")
-		case "bq-cross-project-access", "terraform-bq-scheduled-query":
-			sb.WriteString("  depends_on = [module.terraform_log_router_bq]\n")
 		}
 
 		sb.WriteString("}\n\n")
