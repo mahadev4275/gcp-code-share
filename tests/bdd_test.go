@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/cucumber/godog"
 	"github.com/gruntwork-io/terratest/modules/logger"
@@ -60,7 +58,11 @@ func getModulePriority(dir string) int {
 	}
 }
 
-// ensureLiveInfraProvisioned dynamically discovers and provisions all repository Terraform modules ONCE per test run
+var (
+	masterOpts *terraform.Options
+)
+
+// ensureLiveInfraProvisioned provisions the master composition module ONCE per test run using Terraform's DAG
 func ensureLiveInfraProvisioned(t *testing.T) error {
 	liveInfraOnce.Do(func() {
 		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -77,81 +79,55 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			region = "us-central1"
 		}
 
-		dirs, err := discoverTerraformModuleDirs("..")
+		runnerDir, err := generateAmalgamatedComposition("..")
 		if err != nil {
-			liveInfraSetupErr = fmt.Errorf("failed to dynamically discover terraform module directories: %w", err)
+			liveInfraSetupErr = fmt.Errorf("failed to generate master composition module: %w", err)
 			return
 		}
 
-		// Clean up any stale local terraform state files from interrupted previous test runs
-		cleanStaleStateFiles(dirs)
+		cleanStaleStateFiles([]string{runnerDir})
 
-		// Ensure modules are provisioned in strict dependency order (scope -> dataset -> access)
-		sort.Slice(dirs, func(i, j int) bool {
-			pI := getModulePriority(dirs[i])
-			pJ := getModulePriority(dirs[j])
-			if pI != pJ {
-				return pI < pJ
-			}
-			return dirs[i] < dirs[j]
-		})
-
-		t.Log(">>> [ONE-TIME SETUP] Provisioning live infrastructure across dynamically discovered Terraform modules...")
-		for _, modPath := range dirs {
-			opts := &terraform.Options{
-				TerraformDir: modPath,
-				Vars:         buildVarsForModule(modPath, projectID, region),
-				VarFiles:     detectVarFiles(modPath),
-				EnvVars: map[string]string{
-					"GOOGLE_CLOUD_PROJECT":  projectID,
-					"GOOGLE_PROJECT":        projectID,
-					"GCP_PROJECT":           projectID,
-					"CLOUDSDK_CORE_PROJECT": projectID,
-				},
-			}
-			if isTFQuiet() {
-				opts.Logger = logger.Discard
-			}
-			t.Logf(">>> Applying Terraform module: %s", modPath)
-			if _, err := terraform.InitAndApplyE(t, opts); err != nil {
-				var applyErr error
-				for retry := 1; retry <= 3; retry++ {
-					t.Logf(">>> Retry %d/3 for module %s after transient GCP propagation delay...", retry, modPath)
-					time.Sleep(5 * time.Second)
-					if _, applyErr = terraform.InitAndApplyE(t, opts); applyErr == nil {
-						err = nil
-						break
-					}
-				}
-				if err != nil {
-					liveInfraSetupErr = fmt.Errorf("failed to init and apply terraform module %s: %w", modPath, err)
-					return
-				}
-			}
-			liveModuleOptsMap[modPath] = opts
-			liveModuleOpts = append(liveModuleOpts, opts)
+		opts := &terraform.Options{
+			TerraformDir: runnerDir,
+			Vars: map[string]interface{}{
+				"project_id": projectID,
+				"project":    projectID,
+				"projects":   []string{projectID},
+				"region":     region,
+				"location":   "global",
+			},
+			EnvVars: map[string]string{
+				"GOOGLE_CLOUD_PROJECT":  projectID,
+				"GOOGLE_PROJECT":        projectID,
+				"GCP_PROJECT":           projectID,
+				"CLOUDSDK_CORE_PROJECT": projectID,
+			},
 		}
+		if isTFQuiet() {
+			opts.Logger = logger.Discard
+		}
+
+		t.Log(">>> [ONE-TIME SETUP] Provisioning live infrastructure via master composition module using Terraform's dependency graph...")
+		if _, err := terraform.InitAndApplyE(t, opts); err != nil {
+			liveInfraSetupErr = fmt.Errorf("failed to init and apply master composition module: %w", err)
+			return
+		}
+		masterOpts = opts
 	})
 	return liveInfraSetupErr
 }
 
-// teardownLiveInfra destroys all provisioned live modules in reverse order ONCE per test run
+// teardownLiveInfra destroys all provisioned live infrastructure via the master composition module
 func teardownLiveInfra(t *testing.T) {
-	if len(liveModuleOpts) == 0 {
+	if masterOpts == nil {
 		return
 	}
-	t.Log(">>> [ONE-TIME TEARDOWN] Destroying all provisioned live infrastructure modules...")
-	var dirs []string
-	for i := len(liveModuleOpts) - 1; i >= 0; i-- {
-		dirs = append(dirs, liveModuleOpts[i].TerraformDir)
-		t.Logf(">>> Destroying Terraform module: %s", liveModuleOpts[i].TerraformDir)
-		if _, err := terraform.DestroyE(t, liveModuleOpts[i]); err != nil {
-			t.Errorf("failed to destroy terraform module %s: %v", liveModuleOpts[i].TerraformDir, err)
-		}
+	t.Log(">>> [ONE-TIME TEARDOWN] Destroying master composition live infrastructure...")
+	if _, err := terraform.DestroyE(t, masterOpts); err != nil {
+		t.Errorf("failed to destroy master composition module: %v", err)
 	}
-	cleanStaleStateFiles(dirs)
-	liveModuleOpts = nil
-	liveModuleOptsMap = make(map[string]*terraform.Options)
+	cleanStaleStateFiles([]string{masterOpts.TerraformDir})
+	masterOpts = nil
 }
 
 // bddContext holds the shared state for a single BDD scenario execution
@@ -222,18 +198,19 @@ func TestFeatures(t *testing.T) {
 					region = "us-central1"
 				}
 
-				if opt, ok := liveModuleOptsMap["../Trace_scope"]; ok {
-					c.tfOpts = opt
+				if masterOpts != nil {
+					c.tfOpts = masterOpts
 				} else {
+					runnerDir := filepath.Join(".", "suite_runner")
 					c.tfOpts = &terraform.Options{
-						TerraformDir: "../Trace_scope",
+						TerraformDir: runnerDir,
 						Vars: map[string]interface{}{
-							"project":  projectID,
-							"region":   region,
-							"location": "global",
-							"projects": []string{projectID},
+							"project_id": projectID,
+							"project":    projectID,
+							"projects":   []string{projectID},
+							"region":     region,
+							"location":   "global",
 						},
-						VarFiles: detectVarFiles("../Trace_scope"),
 						EnvVars: map[string]string{
 							"GOOGLE_CLOUD_PROJECT":  projectID,
 							"GOOGLE_PROJECT":        projectID,

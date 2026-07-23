@@ -208,7 +208,79 @@ func buildVarsForModule(dir, projectID, region string) map[string]interface{} {
 	return vars
 }
 
-// getRepositoryPlanChanges runs terraform plan on all modules in the repository with sync.Once caching
+// generateAmalgamatedComposition creates a master composition Terraform module in tests/suite_runner/main.tf
+func generateAmalgamatedComposition(root string) (string, error) {
+	dirs, err := discoverTerraformModuleDirs(root)
+	if err != nil {
+		return "", err
+	}
+
+	runnerDir := filepath.Join(".", "suite_runner")
+	if err := os.MkdirAll(runnerDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create suite_runner directory: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString(`# System-generated master composition module for BDD test execution
+variable "project_id" { type = string }
+variable "project" { type = string }
+variable "projects" { type = list(string) }
+variable "region" { type = string, default = "us-central1" }
+variable "location" { type = string, default = "global" }
+
+`)
+
+	for _, dir := range dirs {
+		base := filepath.Base(dir)
+		modName := strings.ReplaceAll(base, "-", "_")
+		declared := getDeclaredVariablesInDir(dir)
+
+		relSource := filepath.Join("..", dir)
+		sb.WriteString(fmt.Sprintf("module %q {\n", modName))
+		sb.WriteString(fmt.Sprintf("  source = %q\n", relSource))
+
+		if declared["project_id"] {
+			sb.WriteString("  project_id = var.project_id\n")
+		}
+		if declared["project"] {
+			sb.WriteString("  project = var.project\n")
+		}
+		if declared["projects"] {
+			sb.WriteString("  projects = var.projects\n")
+		}
+		if declared["region"] {
+			sb.WriteString("  region = var.region\n")
+		}
+		if declared["location"] {
+			sb.WriteString("  location = var.location\n")
+		}
+		if declared["dataset_id"] {
+			sb.WriteString("  dataset_id = \"trace_spans\"\n")
+		}
+		if declared["sink_name"] {
+			sb.WriteString("  sink_name = \"test_sink\"\n")
+		}
+
+		// Express dependencies explicitly for Terraform's DAG engine
+		switch base {
+		case "logbucket-bqlink", "terraform-log-router-bq":
+			sb.WriteString("  depends_on = [module.Trace_scope]\n")
+		case "bq-cross-project-access", "terraform-bq-scheduled-query":
+			sb.WriteString("  depends_on = [module.terraform_log_router_bq]\n")
+		}
+
+		sb.WriteString("}\n\n")
+	}
+
+	mainTFPath := filepath.Join(runnerDir, "main.tf")
+	if err := os.WriteFile(mainTFPath, []byte(sb.String()), 0644); err != nil {
+		return "", fmt.Errorf("failed to write master composition main.tf: %w", err)
+	}
+
+	return runnerDir, nil
+}
+
+// getRepositoryPlanChanges runs terraform plan on the master composition module with sync.Once caching
 func getRepositoryPlanChanges(t *testing.T) ([]PlanResourceChange, error) {
 	repoPlanChangesOnce.Do(func() {
 		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
@@ -225,23 +297,26 @@ func getRepositoryPlanChanges(t *testing.T) ([]PlanResourceChange, error) {
 			region = "us-central1"
 		}
 
-		dirs, err := discoverTerraformModuleDirs("..")
+		runnerDir, err := generateAmalgamatedComposition("..")
 		if err != nil {
-			cachedPlanErr = fmt.Errorf("failed to discover terraform modules: %w", err)
+			cachedPlanErr = fmt.Errorf("failed to generate master composition module: %w", err)
 			return
 		}
 
-		var allChanges []PlanResourceChange
-		for _, dir := range dirs {
-			modVars := buildVarsForModule(dir, projectID, region)
-			changes, err := getPlanResourceChanges(t, dir, modVars)
-			if err != nil {
-				cachedPlanErr = fmt.Errorf("failed to get plan changes for %s: %w", dir, err)
-				return
-			}
-			allChanges = append(allChanges, changes...)
+		vars := map[string]interface{}{
+			"project_id": projectID,
+			"project":    projectID,
+			"projects":   []string{projectID},
+			"region":     region,
+			"location":   "global",
 		}
-		cachedPlanChanges = allChanges
+
+		changes, err := getPlanResourceChanges(t, runnerDir, vars)
+		if err != nil {
+			cachedPlanErr = fmt.Errorf("failed to get plan changes for master composition module: %w", err)
+			return
+		}
+		cachedPlanChanges = changes
 	})
 
 	return cachedPlanChanges, cachedPlanErr
