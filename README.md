@@ -39,17 +39,21 @@ conftest --version
 
 ## Dual-Suite BDD Test Architecture (Godog + Terratest)
 
-The BDD test suite supports two distinct execution paths selected via `-godog.tags`:
+The BDD test suite automatically discovers all Terraform modules in subdirectories across the repository and supports two distinct execution paths selected via `-godog.tags`:
+
+### Performance & Setup Strategy
+* **Dynamic Module Discovery**: Automatically scans and detects all Terraform module subdirectories in the project.
+* **Cached Static Plans**: Static plan evaluation (`@opa`) runs across all discovered modules using a `sync.Once` cache, completing in **~14 seconds** without deploying live GCP infrastructure.
+* **One-Time Live Setup/Teardown**: When running live scenarios (`@live`), infrastructure across all discovered Terraform modules is provisioned **once per test run** (rather than per scenario) and cleanly destroyed upon suite completion.
 
 ### 1. Static Policy-as-Code & OPA Suite (`@opa`)
 
 Evaluates Terraform plan JSON outputs offline against OPA/Rego rules (`policies/`), Conftest checks, custom role constraints, segregation of duties, and insecure URL scheme scanning (`http://`, `ws://`, `ftp://`, `telnet://`). 
 
 * **Requires $0 GCP resources and no cloud API calls.**
-* **Uses `sync.Once` plan caching for rapid execution (~40-60 seconds total across all repository modules).**
+* **Uses `sync.Once` plan caching for rapid execution (~14 seconds total across all repository modules).**
 
 ```bash
-export PROJECT_ID=code-share-501912
 go test -v ./tests/ -run TestFeatures -godog.tags="@opa"
 ```
 
@@ -62,10 +66,10 @@ go test -v ./tests/ -run TestFeatures -godog.tags="@opa"
 
 ### 2. Live GCP Infrastructure Integration Suite (`@live`)
 
-Provisions live Terraform infrastructure (`terraform apply`), validates active resource behavior and policies against live Google Cloud APIs, and cleans up resources (`terraform destroy`).
+Provisions live Terraform infrastructure (`terraform apply`) across all discovered repository modules **once per test run**, validates active resource behavior and policies against live Google Cloud APIs, and cleans up resources (`terraform destroy`).
 
 ```bash
-export PROJECT_ID=code-share-501912
+export PROJECT_ID=your_gcp_project_id
 go test -v ./tests/ -run TestFeatures -godog.tags="@live"
 ```
 
