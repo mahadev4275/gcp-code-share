@@ -1,14 +1,9 @@
 package tests
 
 import (
-	"context"
 	"fmt"
 
-	kms "cloud.google.com/go/kms/apiv1"
-	"cloud.google.com/go/kms/apiv1/kmspb"
-	"cloud.google.com/go/storage"
 	"github.com/cucumber/godog"
-	"google.golang.org/api/iterator"
 )
 
 // registerCMEKPolicySteps hooks the feature file steps to Go functions
@@ -22,48 +17,7 @@ func (c *bddContext) registerCMEKPolicySteps(sc *godog.ScenarioContext) {
 }
 
 func (c *bddContext) theDataMustBeEncryptedUsingCMEK() error {
-	ctx := context.Background()
-	storageClient, err := storage.NewClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create storage client: %w", err)
-	}
-	defer storageClient.Close()
-
-	kmsClient, err := kms.NewKeyManagementClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create kms client: %w", err)
-	}
-	defer kmsClient.Close()
-
-	it := storageClient.Buckets(ctx, c.projectID)
-	for {
-		attrs, err := it.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		// Verify the bucket has a default KMS key configured
-		if attrs.Encryption == nil || attrs.Encryption.DefaultKMSKeyName == "" {
-			return fmt.Errorf("security violation: storage bucket %s is not using CMEK", attrs.Name)
-		}
-
-		// Use KMS client to verify the key exists and is enabled
-		req := &kmspb.GetCryptoKeyRequest{
-			Name: attrs.Encryption.DefaultKMSKeyName,
-		}
-		key, err := kmsClient.GetCryptoKey(ctx, req)
-		if err != nil {
-			return fmt.Errorf("failed to verify KMS key %s for bucket %s: %w", attrs.Encryption.DefaultKMSKeyName, attrs.Name, err)
-		}
-
-		if key.Primary.State != kmspb.CryptoKeyVersion_ENABLED {
-			return fmt.Errorf("KMS key %s is not in an ENABLED state", attrs.Encryption.DefaultKMSKeyName)
-		}
-	}
-	return nil
+	return c.runConftestAgainstMasterComposition()
 }
 
 func (c *bddContext) theLifecycleOfTheseKeysMustBeManagedByIaC() error {

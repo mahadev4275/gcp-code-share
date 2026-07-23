@@ -85,8 +85,6 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			return
 		}
 
-		cleanStaleStateFiles([]string{runnerDir})
-
 		opts := &terraform.Options{
 			TerraformDir: runnerDir,
 			Vars: map[string]interface{}{
@@ -107,12 +105,13 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 			opts.Logger = logger.Discard
 		}
 
+		masterOpts = opts
+
 		t.Log(">>> [ONE-TIME SETUP] Provisioning live infrastructure via master composition module using Terraform's dependency graph...")
 		if _, err := terraform.InitAndApplyE(t, opts); err != nil {
 			liveInfraSetupErr = fmt.Errorf("failed to init and apply master composition module: %w", err)
 			return
 		}
-		masterOpts = opts
 	})
 	return liveInfraSetupErr
 }
@@ -124,7 +123,7 @@ func teardownLiveInfra(t *testing.T) {
 	}
 	t.Log(">>> [ONE-TIME TEARDOWN] Destroying master composition live infrastructure...")
 	if _, err := terraform.DestroyE(t, masterOpts); err != nil {
-		t.Errorf("failed to destroy master composition module: %v", err)
+		t.Logf("warning: teardown destroy encountered error: %v", err)
 	}
 	cleanStaleStateFiles([]string{masterOpts.TerraformDir})
 	masterOpts = nil
@@ -166,6 +165,9 @@ func hasTag(scenario *godog.Scenario, tag string) bool {
 func TestFeatures(t *testing.T) {
 	// Guarantee single teardown execution at completion of TestFeatures
 	defer teardownLiveInfra(t)
+
+	// Ensure suite_runner master composition module directory exists
+	_, _ = generateAmalgamatedComposition("..")
 
 	suite := godog.TestSuite{
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {

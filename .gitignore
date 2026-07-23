@@ -48,3 +48,6 @@ Thumbs.db
 
 # log files
 *.log
+
+# Generated test suite runner
+tests/suite_runner/

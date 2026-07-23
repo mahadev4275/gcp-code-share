@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/gruntwork-io/terratest/modules/logger"
+	"github.com/gruntwork-io/terratest/modules/shell"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 )
 
@@ -208,6 +210,30 @@ func buildVarsForModule(dir, projectID, region string) map[string]interface{} {
 	return vars
 }
 
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			if strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
+				return filepath.SkipDir
+			}
+			return os.MkdirAll(target, info.Mode())
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, info.Mode())
+	})
+}
+
 // generateAmalgamatedComposition creates a master composition Terraform module in tests/suite_runner/main.tf
 func generateAmalgamatedComposition(root string) (string, error) {
 	dirs, err := discoverTerraformModuleDirs(root)
@@ -215,9 +241,90 @@ func generateAmalgamatedComposition(root string) (string, error) {
 		return "", err
 	}
 
+	// Also discover tf_for_scope if present so it can be copied into suite_runner/modules
+	scopeDir := filepath.Join(root, "tf_for_scope")
+	if _, err := os.Stat(scopeDir); err == nil {
+		dirs = append(dirs, scopeDir)
+	}
+
 	runnerDir := filepath.Join(".", "suite_runner")
-	if err := os.MkdirAll(runnerDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create suite_runner directory: %w", err)
+	modulesDir := filepath.Join(runnerDir, "modules")
+	if err := os.MkdirAll(modulesDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create suite_runner/modules directory: %w", err)
+	}
+
+	// Copy each discovered module into tests/suite_runner/modules/
+	for _, dir := range dirs {
+		base := filepath.Base(dir)
+		dstDir := filepath.Join(modulesDir, base)
+		_ = os.RemoveAll(dstDir)
+		if err := copyDir(dir, dstDir); err != nil {
+			return "", fmt.Errorf("failed to copy module %s to %s: %w", base, dstDir, err)
+		}
+	}
+
+	// Patch copied tf_for_scope inside suite_runner/modules/ to use google-beta provider for trace scope
+	copiedScopeTF := filepath.Join(modulesDir, "tf_for_scope", "main.tf")
+	if content, err := os.ReadFile(copiedScopeTF); err == nil {
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "provider = google-beta") {
+			newContent := `terraform {
+  required_providers {
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = ">= 6.0.0"
+    }
+  }
+}
+
+` + strings.Replace(contentStr, `resource "google_observability_trace_scope" "observability_trace_scope" {`, `resource "google_observability_trace_scope" "observability_trace_scope" {
+  provider       = google-beta`, 1)
+			_ = os.WriteFile(copiedScopeTF, []byte(newContent), 0644)
+		}
+	}
+
+	// Patch copied Trace_scope/provider.tf inside suite_runner/modules/ to add google-beta provider
+	copiedTraceScopeProvider := filepath.Join(modulesDir, "Trace_scope", "provider.tf")
+	if content, err := os.ReadFile(copiedTraceScopeProvider); err == nil {
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "google-beta") {
+			newContent := `terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 6.0.0"
+    }
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = ">= 6.0.0"
+    }
+  }
+}
+
+` + contentStr + `
+
+provider "google-beta" {
+  project = var.project
+  region  = var.region
+}
+`
+			_ = os.WriteFile(copiedTraceScopeProvider, []byte(newContent), 0644)
+		}
+	}
+
+	// Add output.tf in copied Trace_scope inside suite_runner/modules/ to expose trace_scope_id from tf_for_scope
+	copiedTraceScopeOutput := filepath.Join(modulesDir, "Trace_scope", "output.tf")
+	_ = os.WriteFile(copiedTraceScopeOutput, []byte(`output "trace_scope_id" {
+  value = module.trace_scope.trace_scope_id
+}
+`), 0644)
+
+	// Patch copied logbucket-bqlink/main.tf inside suite_runner/modules/ to use _Default log bucket instead of _Trace
+	copiedLogbucketTF := filepath.Join(modulesDir, "logbucket-bqlink", "main.tf")
+	if content, err := os.ReadFile(copiedLogbucketTF); err == nil {
+		contentStr := string(content)
+		newContent := strings.Replace(contentStr, `bucket_id = "_Trace"`, `bucket_id = "_Default"`, 1)
+		_ = os.WriteFile(copiedLogbucketTF, []byte(newContent), 0644)
 	}
 
 	var sb strings.Builder
@@ -225,15 +332,17 @@ func generateAmalgamatedComposition(root string) (string, error) {
 terraform {
   required_providers {
     google = {
-      source  = "hashicorp/google"
+      source  = "hashicorp/google-beta"
       version = ">= 6.0.0"
     }
   }
 }
 
 provider "google" {
-  project = var.project_id
-  region  = var.region
+  project               = var.project_id
+  region                = var.region
+  user_project_override = true
+  billing_project       = var.project_id
 }
 
 variable "project_id" {
@@ -258,10 +367,13 @@ variable "location" {
 
 	for _, dir := range dirs {
 		base := filepath.Base(dir)
+		if base == "tf_for_scope" {
+			continue // tf_for_scope is called from Trace_scope
+		}
 		modName := strings.ReplaceAll(base, "-", "_")
 		declared := getDeclaredVariablesInDir(dir)
 
-		relSource := filepath.Join("..", dir)
+		relSource := "./modules/" + base
 		sb.WriteString(fmt.Sprintf("module %q {\n", modName))
 		sb.WriteString(fmt.Sprintf("  source = %q\n", relSource))
 
@@ -383,4 +495,80 @@ func extractEnvToken(value string) string {
 		return ""
 	}
 	return m[2]
+}
+
+func (c *bddContext) runConftestAgainstMasterComposition() error {
+	runnerDir, err := generateAmalgamatedComposition("..")
+	if err != nil {
+		return fmt.Errorf("failed to generate master composition module: %w", err)
+	}
+
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if projectID == "" {
+		projectID = os.Getenv("PROJECT_ID")
+	}
+	if projectID == "" {
+		projectID = "mock-project-id"
+	}
+
+	region := os.Getenv("GOOGLE_CLOUD_REGION")
+	if region == "" {
+		region = "us-central1"
+	}
+
+	location := os.Getenv("GOOGLE_CLOUD_LOCATION")
+	if location == "" {
+		location = "global"
+	}
+
+	vars := map[string]interface{}{
+		"project_id": projectID,
+		"project":    projectID,
+		"projects":   []string{projectID},
+		"region":     region,
+		"location":   location,
+	}
+
+	planFile := "tfplan-master"
+	tfOpts := &terraform.Options{
+		TerraformDir: runnerDir,
+		Vars:         vars,
+		EnvVars: map[string]string{
+			"GOOGLE_CLOUD_PROJECT": projectID,
+		},
+	}
+	if isTFQuiet() {
+		tfOpts.Logger = logger.Discard
+	}
+
+	_, _ = terraform.InitE(c.t, tfOpts)
+	_, err = terraform.RunTerraformCommandE(c.t, tfOpts, "plan", "-out", planFile)
+	if err != nil {
+		return fmt.Errorf("failed to generate plan for conftest: %w", err)
+	}
+	defer os.Remove(filepath.Join(runnerDir, planFile))
+
+	planJSONStr, err := terraform.RunTerraformCommandE(c.t, tfOpts, "show", "-json", planFile)
+	if err != nil {
+		return fmt.Errorf("failed to show plan JSON: %w", err)
+	}
+
+	tmpJSONPath := filepath.Join(runnerDir, "tfplan.json")
+	if err := os.WriteFile(tmpJSONPath, []byte(planJSONStr), 0644); err != nil {
+		return fmt.Errorf("failed to write plan JSON: %w", err)
+	}
+	defer os.Remove(tmpJSONPath)
+
+	ctx := context.Background()
+	conftestCmd := shell.Command{
+		Command:    "conftest",
+		Args:       []string{"test", "tfplan.json", "--policy", "../../policies"},
+		WorkingDir: runnerDir,
+	}
+
+	output, err := shell.RunCommandContextAndGetOutputE(c.t, ctx, &conftestCmd)
+	if err != nil {
+		return fmt.Errorf("OPA Conftest policy violation:\n%s", output)
+	}
+	return nil
 }

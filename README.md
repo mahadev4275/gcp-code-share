@@ -53,12 +53,12 @@ You can control Terraform logging per test run via CLI flag or environment varia
 
 * **Default (Quiet Mode - Clean Godog Output)**:
   ```bash
-  go test -v ./tests/ -run TestFeatures -godog.tags="@opa"
+  go test -v ./tests/ -godog.tags="@opa and ~@live"
   ```
 * **Verbose Mode (View Full Terraform CLI Output for Debugging)**:
   - **Via CLI flag**:
     ```bash
-    go test -v ./tests/ -run TestFeatures -godog.tags="@opa" -tf.quiet=false
+    go test -v ./tests/ -godog.tags="@opa and ~@live" -tf.quiet=false
     ```
   - **Via environment variable**:
     ```bash
@@ -70,13 +70,16 @@ You can control Terraform logging per test run via CLI flag or environment varia
 Evaluates Terraform plan JSON outputs offline against OPA/Rego rules (`policies/`), Conftest checks, custom role constraints, segregation of duties, and insecure URL scheme scanning (`http://`, `ws://`, `ftp://`, `telnet://`). 
 
 * **Requires $0 GCP resources and no cloud API calls.**
-* **Uses `sync.Once` plan caching for rapid execution (~14 seconds total across all repository modules).**
+* **Uses static plan evaluation completing in ~5 seconds.**
+* **Filtering with `~@live` explicitly prevents `terraform apply` live infrastructure provisioning hooks from running.**
 
 ```bash
-go test -v ./tests/ -run TestFeatures -godog.tags="@opa"
+go test -v ./tests/ -godog.tags="@opa and ~@live"
 ```
 
 #### Feature Tags in `@opa`:
+* `@cmek`: Validates Customer Managed Encryption Keys (CMEK) and KMS key rotation lifecycle policies via OPA Rego rules (`policies/cmek_policy.rego`).
+* `@public_access`: Verifies Storage/Log bucket IAM public access restrictions, Storage Public Access Prevention Org Policies, and VPC-SC Cloud Logging perimeters via Rego rules (`policies/public_access.rego`).
 * `@encryption_in_transit`: Enforces TLS 1.2+, Load Balancer SSL policies (`MODERN`/`RESTRICTED`), Cloud SQL SSL options (`require_ssl=true`, TLS 1.2+), Cloud Run ingress restrictions, and scans planned resource attributes for insecure URL schemes.
 * `@segregation_of_duties`: Enforces segregation of duties in IAM bindings and pipeline service account restrictions.
 * `@custom_roles`: Verifies custom role definitions and ensures no vendor-managed control plane roles are assigned to service accounts.
@@ -93,8 +96,6 @@ go test -v ./tests/ -run TestFeatures -godog.tags="@live"
 ```
 
 #### Feature Tags in `@live`:
-* `@public_access`: Inspects live IAM policies on GCS buckets, effective Org Policy for Storage Public Access Prevention, and VPC Service Perimeters.
-* `@cmek`: Validates symmetric encryption via Customer Managed Encryption Keys (CMEK) and key lifecycle management via IaC.
 * `@iam_restrictions`: Enforces wildcard limits, conditional trust boundary scoping, and folder/project scoped service account bindings.
 * `@GA`: Verifies all enabled GCP APIs in the project are in General Availability (GA) status.
 * `@obs_api`: Checks Cloud Observability / Trace API enablement state.
