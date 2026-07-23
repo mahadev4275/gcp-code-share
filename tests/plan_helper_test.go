@@ -36,9 +36,21 @@ var (
 )
 
 func getPlanResourceChanges(t *testing.T, dir string, vars map[string]interface{}) ([]PlanResourceChange, error) {
+	projectID, _ := vars["project_id"].(string)
+	if projectID == "" {
+		projectID, _ = vars["project"].(string)
+	}
+
 	tfOpts := &terraform.Options{
 		TerraformDir: dir,
 		Vars:         vars,
+		VarFiles:     detectVarFiles(dir),
+		EnvVars: map[string]string{
+			"GOOGLE_CLOUD_PROJECT":  projectID,
+			"GOOGLE_PROJECT":        projectID,
+			"GCP_PROJECT":           projectID,
+			"CLOUDSDK_CORE_PROJECT": projectID,
+		},
 	}
 	if isTFQuiet() {
 		tfOpts.Logger = logger.Discard
@@ -204,7 +216,8 @@ func getRepositoryPlanChanges(t *testing.T) ([]PlanResourceChange, error) {
 			projectID = os.Getenv("PROJECT_ID")
 		}
 		if projectID == "" {
-			projectID = "mock-project-id"
+			cachedPlanErr = fmt.Errorf("GCP Project ID must be set via GOOGLE_CLOUD_PROJECT or PROJECT_ID environment variable")
+			return
 		}
 
 		region := os.Getenv("GOOGLE_CLOUD_REGION")

@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"testing"
 
@@ -43,6 +42,23 @@ func cleanStaleStateFiles(dirs []string) {
 	}
 }
 
+// getModulePriority returns an integer weight for module provisioning order (lower number = applied earlier)
+func getModulePriority(dir string) int {
+	base := filepath.Base(dir)
+	switch base {
+	case "Trace_scope", "tf_for_scope":
+		return 10 // Scope modules provision first
+	case "terraform-log-router-bq", "logbucket-bqlink":
+		return 20 // Dataset and log sink creation second
+	case "terraform-cmek-policy", "terraform-org-policy":
+		return 30 // Org policies third
+	case "bq-cross-project-access", "terraform-bq-scheduled-query":
+		return 40 // IAM bindings and queries fourth (after scope and datasets exist)
+	default:
+		return 50
+	}
+}
+
 // ensureLiveInfraProvisioned dynamically discovers and provisions all repository Terraform modules ONCE per test run
 func ensureLiveInfraProvisioned(t *testing.T) error {
 	liveInfraOnce.Do(func() {
@@ -69,13 +85,12 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 		// Clean up any stale local terraform state files from interrupted previous test runs
 		cleanStaleStateFiles(dirs)
 
-		// Ensure dataset creation modules (e.g. log-router) apply before dataset access binding modules (e.g. bq-cross-project-access)
+		// Ensure modules are provisioned in strict dependency order (scope -> dataset -> access)
 		sort.Slice(dirs, func(i, j int) bool {
-			if strings.Contains(dirs[i], "log-router") && strings.Contains(dirs[j], "bq-cross-project-access") {
-				return true
-			}
-			if strings.Contains(dirs[j], "log-router") && strings.Contains(dirs[i], "bq-cross-project-access") {
-				return false
+			pI := getModulePriority(dirs[i])
+			pJ := getModulePriority(dirs[j])
+			if pI != pJ {
+				return pI < pJ
 			}
 			return dirs[i] < dirs[j]
 		})
@@ -86,6 +101,12 @@ func ensureLiveInfraProvisioned(t *testing.T) error {
 				TerraformDir: modPath,
 				Vars:         buildVarsForModule(modPath, projectID, region),
 				VarFiles:     detectVarFiles(modPath),
+				EnvVars: map[string]string{
+					"GOOGLE_CLOUD_PROJECT":  projectID,
+					"GOOGLE_PROJECT":        projectID,
+					"GCP_PROJECT":           projectID,
+					"CLOUDSDK_CORE_PROJECT": projectID,
+				},
 			}
 			if isTFQuiet() {
 				opts.Logger = logger.Discard
@@ -201,6 +222,12 @@ func TestFeatures(t *testing.T) {
 							"projects": []string{projectID},
 						},
 						VarFiles: detectVarFiles("../Trace_scope"),
+						EnvVars: map[string]string{
+							"GOOGLE_CLOUD_PROJECT":  projectID,
+							"GOOGLE_PROJECT":        projectID,
+							"GCP_PROJECT":           projectID,
+							"CLOUDSDK_CORE_PROJECT": projectID,
+						},
 					}
 					if isTFQuiet() {
 						c.tfOpts.Logger = logger.Discard
