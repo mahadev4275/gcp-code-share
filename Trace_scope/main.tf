@@ -3,7 +3,6 @@ module "trace_scope" {
 
   location = var.location
   project  = var.project
-  projects = var.projects
-  region   = var.region
+  monitored_projects = var.monitored_projects
   
 }

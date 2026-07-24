@@ -3,7 +3,7 @@ resource "google_observability_trace_scope" "observability_trace_scope" {
   location       = var.location
 
   resource_names = [
-    for project_id in var.projects :
+    for project_id in var.monitored_projects :
     "projects/${project_id}"
   ]
 
