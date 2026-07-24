@@ -53,7 +53,9 @@ func generateModulePlanJSON(t *testing.T) (string, []PlanResourceChange, error) 
 			"GCP_PROJECT":           projectID,
 			"CLOUDSDK_CORE_PROJECT": projectID,
 		},
-		Logger: logger.Discard,
+	}
+	if isTFQuiet() {
+		tfOpts.Logger = logger.Discard
 	}
 
 	_, err := terraform.InitE(t, tfOpts)
@@ -103,7 +105,9 @@ func runConftestAgainstModule(t *testing.T) error {
 		Command:    "conftest",
 		Args:       []string{"test", "tfplan.json", "--policy", "./policies"},
 		WorkingDir: ".",
-		Logger:     logger.Discard,
+	}
+	if isTFQuiet() {
+		conftestCmd.Logger = logger.Discard
 	}
 
 	output, err := shell.RunCommandContextAndGetOutputE(t, ctx, &conftestCmd)

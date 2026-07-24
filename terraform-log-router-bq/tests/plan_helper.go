@@ -49,7 +49,15 @@ func generateModulePlanJSON(t *testing.T) (string, []PlanResourceChange, error) 
 			"dataset_id": "test_logs",
 			"sink_name":  "test_sink",
 		},
-		Logger: logger.Discard,
+		EnvVars: map[string]string{
+			"GOOGLE_CLOUD_PROJECT":  projectID,
+			"GOOGLE_PROJECT":        projectID,
+			"GCP_PROJECT":           projectID,
+			"CLOUDSDK_CORE_PROJECT": projectID,
+		},
+	}
+	if isTFQuiet() {
+		tfOpts.Logger = logger.Discard
 	}
 
 	_, err := terraform.InitE(t, tfOpts)
@@ -62,6 +70,7 @@ func generateModulePlanJSON(t *testing.T) (string, []PlanResourceChange, error) 
 	for k, v := range tfOpts.Vars {
 		args = append(args, fmt.Sprintf("-var=%s=%v", k, v))
 	}
+
 	_, err = terraform.RunTerraformCommandE(t, tfOpts, args...)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to plan terraform in %s: %w", dir, err)
@@ -98,7 +107,9 @@ func runConftestAgainstModule(t *testing.T) error {
 		Command:    "conftest",
 		Args:       []string{"test", "tfplan.json", "--policy", "./policies"},
 		WorkingDir: ".",
-		Logger:     logger.Discard,
+	}
+	if isTFQuiet() {
+		conftestCmd.Logger = logger.Discard
 	}
 
 	output, err := shell.RunCommandContextAndGetOutputE(t, ctx, &conftestCmd)

@@ -40,7 +40,7 @@ conftest --version
 ## Modular Per-Module Test Architecture
 
 Each Terraform module in the project root has its own dedicated, isolated `tests/` directory containing:
-* **Tailored BDD Features (`.feature`)**: Scenarios mapped directly to Requirement IDs from [`tests/requirement.md`](file:///home/gregmix88/code/gcp-code-share/tests/requirement.md) (e.g. `@CR.SECURITY.009`, `@CR.SECURITY.034`, `@CR.SECURITY.037`, `@CR.ARCHITECTURE.001`).
+* **Tailored BDD Features (`.feature`)**: Scenarios mapped directly to Requirement IDs from [tests/requirement.md](tests/requirement.md) (e.g. `@CR.SECURITY.009`, `@CR.SECURITY.034`, `@CR.SECURITY.037`, `@CR.ARCHITECTURE.001`).
 * **Tailored Rego Policies (`policies/*.rego`)**: Policy-as-code rules targeting the specific resources defined by the module.
 * **Isolated Test Runners (`bdd_test.go`, `plan_helper.go`)**: Runs static plan generation (`terraform plan -out=tfplan`) and Conftest policy evaluation against only that module.
 
@@ -59,6 +59,27 @@ Each Terraform module in the project root has its own dedicated, isolated `tests
 
 ---
 
+## Controlling Output Logging (Quiet vs Verbose Mode)
+
+By default, verbose Terraform CLI output (`terraform init`, `plan`, `show`) is suppressed (`-tf.quiet=true`) so that Godog BDD scenario steps and pass/fail statistics are displayed cleanly.
+
+* **Default (Quiet Mode - Clean Godog Output)**:
+  ```bash
+  go test -v ./bq-cross-project-access/tests/...
+  ```
+
+* **Verbose Mode (View Full Terraform CLI Output for Debugging)**:
+  - **Via CLI flag**:
+    ```bash
+    go test -v ./bq-cross-project-access/tests/... -tf.quiet=false
+    ```
+  - **Via environment variable**:
+    ```bash
+    TF_QUIET=false go test -v ./...
+    ```
+
+---
+
 ## Running Tests
 
 ### 1. Testing an Individual Module (Independent & Fast)
@@ -71,11 +92,17 @@ go test -v ./bq-cross-project-access/tests/...
 # Test Logging Bucket BigQuery Link module
 go test -v ./logbucket-bqlink/tests/...
 
+# Test Monitoring SQL Alert module
+go test -v ./sql-alert-module/tests/...
+
 # Test Scheduled Query module
 go test -v ./terraform-bq-scheduled-query/tests/...
 
 # Test CMEK Org Policy module
 go test -v ./terraform-cmek-policy/tests/...
+
+# Test Dedicated CMEK Log Bucket module
+go test -v ./terraform-log-bucket-cmek/tests/...
 
 # Test Log Router BigQuery Sink module
 go test -v ./terraform-log-router-bq/tests/...
@@ -96,18 +123,3 @@ To run tests for all modules across the repository:
 ```bash
 go test -v ./...
 ```
-
----
-
-## Requirement ID Mapping & Tags
-
-Each feature and scenario is tagged with its formal Requirement ID from `tests/requirement.md`:
-
-| Requirement ID | Description | Primary Modules |
-| :--- | :--- | :--- |
-| `@CR.SECURITY.009` | Data at rest encryption with CMEK / BYOK & Key Management | `logbucket-bqlink`, `terraform-cmek-policy`, `terraform-log-router-bq` |
-| `@CR.SECURITY.034` | IAM Least Privilege, no wildcards in allow statements | `bq-cross-project-access`, `terraform-bq-scheduled-query`, `terraform-log-router-bq` |
-| `@CR.SECURITY.035` | Custom roles & service account control plane restriction | `terraform-bq-scheduled-query` |
-| `@CR.SECURITY.037` | Public access prevention on Storage/Logging buckets & BigQuery | `bq-cross-project-access`, `logbucket-bqlink` |
-| `@CR.ARCHITECTURE.001` | General Availability (GA) CSP services & Location policies | `terraform-org-policy`, `tf_for_scope`, `Trace_scope` |
-| `@CR.SECURITY.002` | Encryption in transit & secure protocol enforcement | `terraform-log-router-bq`, `tf_for_scope` |

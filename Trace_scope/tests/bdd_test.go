@@ -3,12 +3,26 @@ package tests
 import (
 	"context"
 	"flag"
+	"os"
 	"testing"
 
 	"github.com/cucumber/godog"
 )
 
-var godogTags = flag.String("godog.tags", "", "filter scenarios by tags")
+var (
+	godogTags   = flag.String("godog.tags", "", "filter scenarios by tags")
+	tfQuietFlag = flag.Bool("tf.quiet", true, "suppress verbose Terraform CLI output (default true; set -tf.quiet=false to view Terraform logs)")
+)
+
+func isTFQuiet() bool {
+	if v := os.Getenv("TF_QUIET"); v != "" {
+		return v != "false" && v != "0"
+	}
+	if tfQuietFlag != nil {
+		return *tfQuietFlag
+	}
+	return true
+}
 
 func TestFeatures(t *testing.T) {
 	suite := godog.TestSuite{
