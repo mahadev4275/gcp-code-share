@@ -4,15 +4,15 @@ import future.keywords.in
 import future.keywords.contains
 import future.keywords.if
 
-# 1. Warn if Logging Buckets do not specify cmek_settings (CR.SECURITY.009)
-warn contains msg if {
+# 1. Deny if Logging Buckets do not specify cmek_settings (CR.SECURITY.009)
+deny contains msg if {
 	some resource in input.resource_changes
 	resource.type == "google_logging_project_bucket_config"
 
 	cmek := object.get(resource.change.after, "cmek_settings", [])
 	not is_cmek_configured(cmek)
 
-	msg := sprintf("Security warning (CR.SECURITY.009): Logging bucket '%v' missing cmek_settings.kms_key_name", [resource.address])
+	msg := sprintf("Security violation (CR.SECURITY.009): Logging bucket '%v' missing cmek_settings.kms_key_name", [resource.address])
 }
 
 # 2. Deny Public Members on Logging Bucket IAM (CR.SECURITY.037)

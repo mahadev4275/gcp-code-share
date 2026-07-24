@@ -19,7 +19,14 @@ func (c *bddContext) registerSteps(sc *godog.ScenarioContext) {
 }
 
 func (c *bddContext) verifyEncryptionConfigured() error {
-	// Evaluated via OPA Rego policy
+	for _, rc := range c.plannedChanges {
+		if rc.Type == "google_bigquery_dataset" {
+			enc, ok := rc.Change.After["default_encryption_configuration"].([]interface{})
+			if !ok || len(enc) == 0 {
+				return fmt.Errorf("security violation (CR.SECURITY.009): BigQuery dataset %s missing default_encryption_configuration", rc.Address)
+			}
+		}
+	}
 	return nil
 }
 
