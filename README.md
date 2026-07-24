@@ -37,87 +37,77 @@ conftest --version
 
 ---
 
-## Dual-Suite BDD Test Architecture (Godog + Terratest)
+## Modular Per-Module Test Architecture
 
-The BDD test suite automatically discovers all Terraform modules in subdirectories across the repository and supports two distinct execution paths selected via `-godog.tags`:
+Each Terraform module in the project root has its own dedicated, isolated `tests/` directory containing:
+* **Tailored BDD Features (`.feature`)**: Scenarios mapped directly to Requirement IDs from [`tests/requirement.md`](file:///home/gregmix88/code/gcp-code-share/tests/requirement.md) (e.g. `@CR.SECURITY.009`, `@CR.SECURITY.034`, `@CR.SECURITY.037`, `@CR.ARCHITECTURE.001`).
+* **Tailored Rego Policies (`policies/*.rego`)**: Policy-as-code rules targeting the specific resources defined by the module.
+* **Isolated Test Runners (`bdd_test.go`, `plan_helper.go`)**: Runs static plan generation (`terraform plan -out=tfplan`) and Conftest policy evaluation against only that module.
 
-### Performance & Setup Strategy
-* **Dynamic Module Discovery**: Automatically scans and detects all Terraform module subdirectories in the project.
-* **Cached Static Plans**: Static plan evaluation (`@opa`) runs across all discovered modules using a `sync.Once` cache, completing in **~14 seconds** without deploying live GCP infrastructure.
-* **One-Time Live Setup/Teardown**: When running live scenarios (`@live`), infrastructure across all discovered Terraform modules is provisioned **once per test run** (rather than per scenario) and cleanly destroyed upon suite completion.
-
-### Controlling Terraform CLI Output & Logging
-By default, verbose Terraform CLI logs (`terraform init`, `plan`, `apply`, `destroy`) are suppressed so that Godog Gherkin scenarios and pass/fail summaries are displayed cleanly.
-
-You can control Terraform logging per test run via CLI flag or environment variable:
-
-* **Default (Quiet Mode - Clean Godog Output)**:
-  ```bash
-  go test -v ./tests/ -godog.tags="opa && ~live"
-  ```
-* **Verbose Mode (View Full Terraform CLI Output for Debugging)**:
-  - **Via CLI flag**:
-    ```bash
-    go test -v ./tests/ -godog.tags="opa && ~live" -tf.quiet=false
-    ```
-  - **Via environment variable**:
-    ```bash
-    TF_QUIET=false go test -v ./tests/ -run TestFeatures -godog.tags="@live"
-    ```
-
-### 1. Static Policy-as-Code & OPA Suite (`@opa`)
-
-Evaluates Terraform plan JSON outputs offline against OPA/Rego rules (`policies/`), Conftest checks, custom role constraints, segregation of duties, and insecure URL scheme scanning (`http://`, `ws://`, `ftp://`, `telnet://`). 
-
-* **Requires $0 GCP resources and no cloud API calls.**
-* **Uses static plan evaluation completing in ~5 seconds.**
-* **Filtering with `~live` explicitly prevents `terraform apply` live infrastructure provisioning hooks from running.**
-
-```bash
-go test -v ./tests/ -godog.tags="opa && ~live"
+### Module Test Directory Structure
 ```
-
-#### Feature Tags in `@opa`:
-* `@cmek`: Validates Customer Managed Encryption Keys (CMEK) and KMS key rotation lifecycle policies via OPA Rego rules (`policies/cmek_policy.rego`).
-* `@public_access`: Verifies Storage/Log bucket IAM public access restrictions, Storage Public Access Prevention Org Policies, and VPC-SC Cloud Logging perimeters via Rego rules (`policies/public_access.rego`).
-* `@encryption_in_transit`: Enforces TLS 1.2+, Load Balancer SSL policies (`MODERN`/`RESTRICTED`), Cloud SQL SSL options (`require_ssl=true`, TLS 1.2+), Cloud Run ingress restrictions, and scans planned resource attributes for insecure URL schemes.
-* `@segregation_of_duties`: Enforces segregation of duties in IAM bindings and pipeline service account restrictions.
-* `@custom_roles`: Verifies custom role definitions and ensures no vendor-managed control plane roles are assigned to service accounts.
+<module_name>/
+  └── tests/
+      ├── bdd_test.go
+      ├── plan_helper.go
+      ├── steps_test.go
+      ├── features/
+      │   └── <module_name>.feature
+      └── policies/
+          └── <module_name>_policy.rego
+```
 
 ---
 
-### 2. Live GCP Infrastructure Integration Suite (`@live`)
+## Running Tests
 
-Provisions live Terraform infrastructure (`terraform apply`) across all discovered repository modules **once per test run**, validates active resource behavior and policies against live Google Cloud APIs, and cleans up resources (`terraform destroy`).
+### 1. Testing an Individual Module (Independent & Fast)
+To test a single Terraform module in isolation without affecting or deploying other modules:
 
 ```bash
-export PROJECT_ID=your_gcp_project_id
-go test -v ./tests/ -run TestFeatures -godog.tags="@live"
+# Test BigQuery Cross-Project Access module
+go test -v ./bq-cross-project-access/tests/...
+
+# Test Logging Bucket BigQuery Link module
+go test -v ./logbucket-bqlink/tests/...
+
+# Test Scheduled Query module
+go test -v ./terraform-bq-scheduled-query/tests/...
+
+# Test CMEK Org Policy module
+go test -v ./terraform-cmek-policy/tests/...
+
+# Test Log Router BigQuery Sink module
+go test -v ./terraform-log-router-bq/tests/...
+
+# Test Resource Locations Org Policy module
+go test -v ./terraform-org-policy/tests/...
+
+# Test Observability Trace Scope module
+go test -v ./tf_for_scope/tests/...
+
+# Test Trace Scope Wrapper module
+go test -v ./Trace_scope/tests/...
 ```
 
-#### Feature Tags in `@live`:
-* `@iam_restrictions`: Enforces wildcard limits, conditional trust boundary scoping, and folder/project scoped service account bindings.
-* `@GA`: Verifies all enabled GCP APIs in the project are in General Availability (GA) status.
-* `@obs_api`: Checks Cloud Observability / Trace API enablement state.
-* `@encryption_compliance`: Audits KMS key ring, cryptographic algorithm (AES-256-GCM), key bit strength (256-bit), CloudHSM protection levels, and key rotation.
+### 2. Testing All Modules Concurrently across Repository
+To run tests for all modules across the repository:
+
+```bash
+go test -v ./...
+```
 
 ---
 
-## Additional Compliance Testing (OPA/Rego with Terratest)
+## Requirement ID Mapping & Tags
 
-Run individual static Terratest compliance checks directly:
+Each feature and scenario is tagged with its formal Requirement ID from `tests/requirement.md`:
 
-```bash
-go test -v ./tests/ -run TestPublicAccessRegoPolicyWithTerratest
-```
-
-### Specifying Terraform Variables (.tfvars)
-By default, the test suite dynamically reads parameters from environment variables (`PROJECT_ID` / `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_REGION`). 
-
-To specify custom `.tfvars`:
-1. **Auto-detection (Default Names):** Place `terraform.tfvars`, `terraform.tfvars.json`, `*.auto.tfvars`, or `*.auto.tfvars.json` in module directories.
-2. **Custom Filename:** Set `TF_VAR_FILE` before running:
-   ```bash
-   export TF_VAR_FILE=/path/to/custom.tfvars
-   go test -v ./tests/ -run TestPublicAccessRegoPolicyWithTerratest
-   ```
+| Requirement ID | Description | Primary Modules |
+| :--- | :--- | :--- |
+| `@CR.SECURITY.009` | Data at rest encryption with CMEK / BYOK & Key Management | `logbucket-bqlink`, `terraform-cmek-policy`, `terraform-log-router-bq` |
+| `@CR.SECURITY.034` | IAM Least Privilege, no wildcards in allow statements | `bq-cross-project-access`, `terraform-bq-scheduled-query`, `terraform-log-router-bq` |
+| `@CR.SECURITY.035` | Custom roles & service account control plane restriction | `terraform-bq-scheduled-query` |
+| `@CR.SECURITY.037` | Public access prevention on Storage/Logging buckets & BigQuery | `bq-cross-project-access`, `logbucket-bqlink` |
+| `@CR.ARCHITECTURE.001` | General Availability (GA) CSP services & Location policies | `terraform-org-policy`, `tf_for_scope`, `Trace_scope` |
+| `@CR.SECURITY.002` | Encryption in transit & secure protocol enforcement | `terraform-log-router-bq`, `tf_for_scope` |
