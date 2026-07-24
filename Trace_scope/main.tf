@@ -1,9 +1,8 @@
 module "trace_scope" {
-  source = "../tf_for_scope"
+  source = "./modules/tf_for_scope"
 
   location = var.location
   project  = var.project
-  projects = var.projects
-  region   = var.region
-
+  monitored_projects = var.monitored_projects
+  
 }

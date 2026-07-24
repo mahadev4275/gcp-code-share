@@ -4,7 +4,7 @@ module "billing_summary_query" {
 
   project_id = var.project_id
 
-  dataset_id = "projects_logs_bq"
+  dataset_id = "project_logs_bq"
 
   query_name = "daily_billing_summary"
 

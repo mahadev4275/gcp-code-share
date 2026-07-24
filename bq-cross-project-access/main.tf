@@ -4,16 +4,14 @@ module "cross_project_access" {
 
   project_id = var.project_id
 
-  dataset_id = "trace_spans"
+  dataset_id = "demo"
 
   role = "roles/bigquery.dataViewer"
 
-  members = {
+  members = { 
 
-    analytics_sa = "serviceAccount:analytics-sa@analytics-project.iam.gserviceaccount.com"
+    User = "user:argo-50f7bc@gc-trial-0041.orgtrials.ongcp.co"
 
-    sre_team = "group:sre@example.com"
-
-    finops_team = "group:finops@example.com"
+   
   }
 }
