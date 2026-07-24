@@ -2,35 +2,38 @@ package tests
 
 import (
 	"context"
-	"os"
-	"testing"
+	"fmt"
+	"strings"
 
+	"github.com/cucumber/godog"
 	serviceusage "google.golang.org/api/serviceusage/v1"
 )
 
-func TestServiceUsage(t *testing.T) {
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if projectID == "" {
-		projectID = os.Getenv("PROJECT_ID")
-	}
-	if projectID == "" {
-		t.Fatal("GCP Project ID must be set via the GOOGLE_CLOUD_PROJECT or PROJECT_ID environment variable")
-	}
+func (c *bddContext) registerObservabilitySteps(sc *godog.ScenarioContext) {
+	sc.Step(`^I check the status of the Cloud "([^"]*)" API$`, c.iCheckTheStatusOfTheCloudObsAPI)
+	sc.Step(`^the Observability API state should be "([^"]*)"$`, c.theCloudObsAPIStateShouldBe)
+}
 
+func (c *bddContext) iCheckTheStatusOfTheCloudObsAPI(api string) error {
 	ctx := context.Background()
 	service, err := serviceusage.NewService(ctx)
 	if err != nil {
-		t.Fatal(err)
+		return fmt.Errorf("failed to create serviceusage client: %w", err)
 	}
 
-	// Checking cloudtrace as the representative 'observability' API for this scope
-	name := "projects/" + projectID + "/services/cloudtrace.googleapis.com"
+	name := "projects/" + c.projectID + "/services/" + strings.ToLower(api) + ".googleapis.com"
 	resp, err := service.Services.Get(name).Context(ctx).Do()
 	if err != nil {
-		t.Fatalf("Failed to fetch service status for %s: %v", name, err)
+		return fmt.Errorf("failed to fetch service status for %s: %w", name, err)
 	}
 
-	if resp.State != "ENABLED" {
-		t.Errorf("Expected service %s to be ENABLED, but got %s", name, resp.State)
+	c.traceServiceState = resp.State
+	return nil
+}
+
+func (c *bddContext) theCloudObsAPIStateShouldBe(expectedState string) error {
+	if c.traceServiceState != expectedState {
+		return fmt.Errorf("expected API to be %s, but got %s", expectedState, c.traceServiceState)
 	}
+	return nil
 }
