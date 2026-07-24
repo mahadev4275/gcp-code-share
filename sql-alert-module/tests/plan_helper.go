@@ -45,9 +45,7 @@ func generateModulePlanJSON(t *testing.T) (string, []PlanResourceChange, error) 
 	tfOpts := &terraform.Options{
 		TerraformDir: dir,
 		Vars: map[string]interface{}{
-			"project":            projectID,
-			"monitored_projects": []string{projectID},
-			"location":           "global",
+			"project_id": projectID,
 		},
 		EnvVars: map[string]string{
 			"GOOGLE_CLOUD_PROJECT":  projectID,
@@ -66,12 +64,7 @@ func generateModulePlanJSON(t *testing.T) (string, []PlanResourceChange, error) 
 	planFile := "tfplan.binary"
 	args := []string{"plan", "-out=" + planFile}
 	for k, v := range tfOpts.Vars {
-		switch val := v.(type) {
-		case []string:
-			args = append(args, fmt.Sprintf("-var=%s=[\"%s\"]", k, val[0]))
-		default:
-			args = append(args, fmt.Sprintf("-var=%s=%v", k, val))
-		}
+		args = append(args, fmt.Sprintf("-var=%s=%v", k, v))
 	}
 
 	_, err = terraform.RunTerraformCommandE(t, tfOpts, args...)
