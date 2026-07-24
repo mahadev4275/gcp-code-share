@@ -53,12 +53,12 @@ You can control Terraform logging per test run via CLI flag or environment varia
 
 * **Default (Quiet Mode - Clean Godog Output)**:
   ```bash
-  go test -v ./tests/ -godog.tags="@opa and ~@live"
+  go test -v ./tests/ -godog.tags="opa && ~live"
   ```
 * **Verbose Mode (View Full Terraform CLI Output for Debugging)**:
   - **Via CLI flag**:
     ```bash
-    go test -v ./tests/ -godog.tags="@opa and ~@live" -tf.quiet=false
+    go test -v ./tests/ -godog.tags="opa && ~live" -tf.quiet=false
     ```
   - **Via environment variable**:
     ```bash
@@ -71,10 +71,10 @@ Evaluates Terraform plan JSON outputs offline against OPA/Rego rules (`policies/
 
 * **Requires $0 GCP resources and no cloud API calls.**
 * **Uses static plan evaluation completing in ~5 seconds.**
-* **Filtering with `~@live` explicitly prevents `terraform apply` live infrastructure provisioning hooks from running.**
+* **Filtering with `~live` explicitly prevents `terraform apply` live infrastructure provisioning hooks from running.**
 
 ```bash
-go test -v ./tests/ -godog.tags="@opa and ~@live"
+go test -v ./tests/ -godog.tags="opa && ~live"
 ```
 
 #### Feature Tags in `@opa`:

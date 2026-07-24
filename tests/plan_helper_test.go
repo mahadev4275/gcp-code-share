@@ -58,14 +58,15 @@ func getPlanResourceChanges(t *testing.T, dir string, vars map[string]interface{
 		tfOpts.Logger = logger.Discard
 	}
 
-	planFile := filepath.Join(dir, "tfplan-"+filepath.Base(dir))
+	planFileName := "tfplan-" + filepath.Base(dir)
+	planFile := filepath.Join(dir, planFileName)
 
 	_, err := terraform.InitE(t, tfOpts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to init in %s: %w", dir, err)
 	}
 
-	args := []string{"plan", "-out", planFile}
+	args := []string{"plan", "-out", planFileName}
 	for k, v := range vars {
 		switch val := v.(type) {
 		case string:
@@ -88,7 +89,7 @@ func getPlanResourceChanges(t *testing.T, dir string, vars map[string]interface{
 	}
 	defer os.Remove(planFile)
 
-	planJSONStr, err := terraform.RunTerraformCommandE(t, tfOpts, "show", "-json", planFile)
+	planJSONStr, err := terraform.RunTerraformCommandE(t, tfOpts, "show", "-json", planFileName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to show json in %s: %w", dir, err)
 	}
@@ -542,7 +543,23 @@ func (c *bddContext) runConftestAgainstMasterComposition() error {
 	}
 
 	_, _ = terraform.InitE(c.t, tfOpts)
-	_, err = terraform.RunTerraformCommandE(c.t, tfOpts, "plan", "-out", planFile)
+	args := []string{"plan", "-out", planFile}
+	for k, v := range vars {
+		switch val := v.(type) {
+		case string:
+			args = append(args, "-var", fmt.Sprintf("%s=%s", k, val))
+		case []string:
+			var quoted []string
+			for _, s := range val {
+				quoted = append(quoted, fmt.Sprintf("%q", s))
+			}
+			listStr := "[" + strings.Join(quoted, ",") + "]"
+			args = append(args, "-var", fmt.Sprintf("%s=%s", k, listStr))
+		default:
+			args = append(args, "-var", fmt.Sprintf("%s=%v", k, val))
+		}
+	}
+	_, err = terraform.RunTerraformCommandE(c.t, tfOpts, args...)
 	if err != nil {
 		return fmt.Errorf("failed to generate plan for conftest: %w", err)
 	}
@@ -564,6 +581,9 @@ func (c *bddContext) runConftestAgainstMasterComposition() error {
 		Command:    "conftest",
 		Args:       []string{"test", "tfplan.json", "--policy", "../../policies"},
 		WorkingDir: runnerDir,
+	}
+	if isTFQuiet() {
+		conftestCmd.Logger = logger.Discard
 	}
 
 	output, err := shell.RunCommandContextAndGetOutputE(c.t, ctx, &conftestCmd)

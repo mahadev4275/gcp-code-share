@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cucumber/godog"
+	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/shell"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 )
@@ -215,16 +216,21 @@ func runConftestOnDirWithVars(t *testing.T, dir string, vars map[string]interfac
 		TerraformDir: dir,
 		Vars:         vars,
 	}
+	if isTFQuiet() {
+		tfOpts.Logger = logger.Discard
+	}
 
-	planFile := filepath.Join(dir, "tfplan-"+filepath.Base(dir))
-	planJSONFile := filepath.Join(dir, "tfplan-"+filepath.Base(dir)+".json")
+	planFileName := "tfplan-" + filepath.Base(dir)
+	planJSONFileName := planFileName + ".json"
+	planFile := filepath.Join(dir, planFileName)
+	planJSONFile := filepath.Join(dir, planJSONFileName)
 
 	_, err := terraform.InitE(t, tfOpts)
 	if err != nil {
 		return fmt.Errorf("terraform init failed in %s: %w", dir, err)
 	}
 
-	args := []string{"plan", "-out", planFile}
+	args := []string{"plan", "-out", planFileName}
 	for k, v := range vars {
 		switch val := v.(type) {
 		case string:
@@ -247,7 +253,7 @@ func runConftestOnDirWithVars(t *testing.T, dir string, vars map[string]interfac
 	}
 	defer os.Remove(planFile)
 
-	planJSON, err := terraform.RunTerraformCommandE(t, tfOpts, "show", "-json", planFile)
+	planJSON, err := terraform.RunTerraformCommandE(t, tfOpts, "show", "-json", planFileName)
 	if err != nil {
 		return fmt.Errorf("terraform show -json failed in %s: %w", dir, err)
 	}
@@ -262,8 +268,11 @@ func runConftestOnDirWithVars(t *testing.T, dir string, vars map[string]interfac
 
 	conftestCmd := shell.Command{
 		Command:    "conftest",
-		Args:       []string{"test", planJSONFile, "--policy", absPolicyDir},
+		Args:       []string{"test", planJSONFileName, "--policy", absPolicyDir},
 		WorkingDir: dir,
+	}
+	if isTFQuiet() {
+		conftestCmd.Logger = logger.Discard
 	}
 
 	output, err := shell.RunCommandContextAndGetOutputE(t, ctx, &conftestCmd)

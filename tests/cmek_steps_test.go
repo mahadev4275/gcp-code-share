@@ -26,10 +26,8 @@ func (c *bddContext) theLifecycleOfTheseKeysMustBeManagedByIaC() error {
 	}
 	for _, rc := range c.plannedChanges {
 		if rc.Type == "google_kms_crypto_key" || rc.Type == "google_kms_key_ring" {
-			fmt.Printf("Verified KMS key management via IaC: %s\n", rc.Address)
 			return nil
 		}
 	}
-	fmt.Printf("Verified KMS key lifecycle managed via IaC for project: %s\n", c.projectID)
-	return nil
+	return fmt.Errorf("security policy violation: no KMS key rings (google_kms_key_ring) or crypto keys (google_kms_crypto_key) found in IaC planned changes for project %s", c.projectID)
 }

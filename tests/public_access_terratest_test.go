@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/shell"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +34,9 @@ func TestPublicAccessRegoPolicyWithTerratest(t *testing.T) {
 	// Define Options
 	terraformOptions := &terraform.Options{
 		TerraformDir: terraformDir,
+	}
+	if isTFQuiet() {
+		terraformOptions.Logger = logger.Discard
 	}
 
 	// Use TF_VAR_FILE if specified
@@ -86,6 +90,9 @@ func TestPublicAccessRegoPolicyWithTerratest(t *testing.T) {
 		Command:    "conftest",
 		Args:       []string{"test", tmpPlanJSON, "--policy", "../policies"},
 		WorkingDir: terraformDir,
+	}
+	if isTFQuiet() {
+		conftestCmd.Logger = logger.Discard
 	}
 	
 	output, err := shell.RunCommandContextAndGetOutputE(t, ctx, &conftestCmd)
