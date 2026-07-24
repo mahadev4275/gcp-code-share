@@ -4,7 +4,7 @@ module "log_analytics" {
 
   project_id = var.project_id
 
-  bucket_id = "_Trace"
+  bucket_id = "log23obs"
 
   location = "global"
 
