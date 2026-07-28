@@ -24,7 +24,7 @@ func isTFQuiet() bool {
 	return true
 }
 
-func TestFeatures(t *testing.T) {
+func TestCMEKPolicyFeatures(t *testing.T) {
 	suite := godog.TestSuite{
 		ScenarioInitializer: func(sc *godog.ScenarioContext) {
 			c := &bddContext{}

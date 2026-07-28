@@ -1,5 +1,5 @@
 @live @encryption_compliance
-Feature: Encryption Compliance — Key Management Standard
+Feature: [E2E Suite] Encryption Compliance — Key Management Standard
   As a Security Administrator
   I want to ensure all encryption implementations comply with the corporate Key Management Standard
   So that data at rest and data in transit meet approved cryptographic, key lifecycle, and compliance requirements

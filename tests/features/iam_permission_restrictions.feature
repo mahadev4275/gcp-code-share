@@ -1,5 +1,5 @@
 @live @iam_restrictions
-Feature: IAM Permission Restrictions Check
+Feature: [E2E Suite] IAM Permission Restrictions Check
   As a GCP security administrator
   I want to ensure IAM permission restrictions are enforced in Terraform configurations
   So that privilege escalation, public access, and cross-environment access are prevented

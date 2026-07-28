@@ -1,5 +1,5 @@
 @live @GA
-Feature: GCP APIs General Availability Check
+Feature: [E2E Suite] GCP APIs General Availability Check
   As a GCP administrator
   I want to ensure all enabled APIs in the project are in General Availability (GA)
   So that the project does not rely on preview or beta features in production

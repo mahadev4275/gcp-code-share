@@ -162,8 +162,8 @@ func hasTag(scenario *godog.Scenario, tag string) bool {
 	return false
 }
 
-func TestFeatures(t *testing.T) {
-	// Guarantee single teardown execution at completion of TestFeatures
+func TestE2ESuiteFeatures(t *testing.T) {
+	// Guarantee single teardown execution at completion of TestE2ESuiteFeatures
 	defer teardownLiveInfra(t)
 
 	// Ensure suite_runner master composition module directory exists

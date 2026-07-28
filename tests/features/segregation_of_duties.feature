@@ -1,5 +1,5 @@
 @opa @segregation_of_duties
-Feature: Segregation of Duties
+Feature: [E2E Suite] Segregation of Duties & IAM Role Restrictions
   As a GCP security administrator
   I want to enforce segregation of duties in IAM policies
   So that no single identity accumulates conflicting duties or inappropriate permissions

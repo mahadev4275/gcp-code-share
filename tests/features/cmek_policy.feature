@@ -1,5 +1,5 @@
 @opa @cmek
-Feature: CMEK Policy for Infrastructure Data at Rest
+Feature: [E2E Suite] CMEK Policy for Infrastructure Data at Rest
 
   As a Security Administrator,
   I want to ensure all infrastructure data at rest is encrypted using Customer Managed Encryption Keys (CMEK)

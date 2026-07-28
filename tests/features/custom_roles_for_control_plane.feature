@@ -1,5 +1,5 @@
 @opa @custom_roles
-Feature: Custom Roles for Control Plane
+Feature: [E2E Suite] Custom Roles for Control Plane
   As a GCP security administrator
   I want to ensure service accounts and key management utilize custom roles rather than vendor-managed control plane roles
   So that the principle of least privilege is enforced and broad access is restricted

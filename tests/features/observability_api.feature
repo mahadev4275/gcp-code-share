@@ -1,5 +1,5 @@
 @live @obs_api
-Feature: GCP Observability API Enablement Check
+Feature: [E2E Suite] GCP Observability API Enablement Check
   As a GCP administrator
   I want to ensure that the observability API is enabled
   So that tracing and monitoring are active for the project

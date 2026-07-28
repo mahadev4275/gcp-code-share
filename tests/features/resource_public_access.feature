@@ -1,5 +1,5 @@
 @opa @public_access
-Feature: GCP Resource Public Access Prevention Check
+Feature: [E2E Suite] GCP Resource Public Access Prevention Check
   As a GCP administrator
   I want to ensure that logging, tracing, and observability bucket data are not public
   So that sensitive logs and telemetry are protected

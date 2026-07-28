@@ -1,5 +1,5 @@
 @opa @encryption_in_transit
-Feature: Encryption in Transit & Protocol Compliance
+Feature: [E2E Suite] Encryption in Transit & Protocol Compliance
   As a GCP Security Administrator
   I want to ensure all data in transit across external, internal, and database communication channels is encrypted
   So that legacy unencrypted protocols are rejected, insecure URL schemes are prohibited, and compliance with security standards is maintained
