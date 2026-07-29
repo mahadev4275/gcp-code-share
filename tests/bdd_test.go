@@ -218,8 +218,8 @@ func TestE2ESuiteFeatures(t *testing.T) {
 				}
 
 				// LAZY SETUP: Only provision live infrastructure ONCE if scenario is tagged @live
-				// GCA tests are API-only and do not require Terraform infrastructure
-				if hasTag(scenario, "@live") && !hasTag(scenario, "@gca") {
+				// GCA and Observability API tests are API-only and do not require Terraform infrastructure
+				if hasTag(scenario, "@live") && !hasTag(scenario, "@gca") && !hasTag(scenario, "@obs_api") {
 					if err := ensureLiveInfraProvisioned(t); err != nil {
 						return ctx, fmt.Errorf("failed live infrastructure provision step: %w", err)
 					}
