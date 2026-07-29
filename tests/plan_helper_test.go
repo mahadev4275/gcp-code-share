@@ -222,7 +222,7 @@ func copyDir(src, dst string) error {
 		}
 		target := filepath.Join(dst, rel)
 		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), ".") && info.Name() != "." {
+			if (strings.HasPrefix(info.Name(), ".") && info.Name() != ".") || info.Name() == "tests" {
 				return filepath.SkipDir
 			}
 			return os.MkdirAll(target, info.Mode())
