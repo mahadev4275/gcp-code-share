@@ -56,13 +56,13 @@ func TestPublicAccessRegoPolicyWithTerratest(t *testing.T) {
 			hasTfvars = true
 		}
 
-		// Fallback to env vars only if no tfvars files exist
 		if !hasTfvars {
 			terraformOptions.Vars = map[string]interface{}{
-				"project":  projectID,
-				"region":   region,
-				"location": region,
-				"projects": []string{projectID},
+				"project":            projectID,
+				"monitored_projects": []string{projectID},
+				"region":             region,
+				"location":           region,
+				"projects":           []string{projectID},
 			}
 		}
 	}

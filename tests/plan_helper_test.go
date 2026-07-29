@@ -302,8 +302,6 @@ func generateAmalgamatedComposition(root string) (string, error) {
   }
 }
 
-` + contentStr + `
-
 provider "google-beta" {
   project = var.project
   region  = var.region
