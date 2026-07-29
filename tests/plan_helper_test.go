@@ -368,6 +368,14 @@ variable "location" {
 		sb.WriteString(fmt.Sprintf("module %q {\n", modName))
 		sb.WriteString(fmt.Sprintf("  source = %q\n", relSource))
 
+		// Trace_scope needs google-beta provider for google_observability_trace_scope resource
+		if base == "Trace_scope" {
+			sb.WriteString("  providers = {\n")
+			sb.WriteString("    google      = google\n")
+			sb.WriteString("    google-beta = google-beta\n")
+			sb.WriteString("  }\n")
+		}
+
 		if declared["project_id"] {
 			switch base {
 			case "logbucket-bqlink", "terraform-log-router-bq":
