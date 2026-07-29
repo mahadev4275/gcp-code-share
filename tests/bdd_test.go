@@ -41,22 +41,6 @@ func cleanStaleStateFiles(dirs []string) {
 	}
 }
 
-// getModulePriority returns an integer weight for module provisioning order (lower number = applied earlier)
-func getModulePriority(dir string) int {
-	base := filepath.Base(dir)
-	switch base {
-	case "Trace_scope", "tf_for_scope":
-		return 10 // Scope modules provision first
-	case "terraform-log-router-bq", "logbucket-bqlink":
-		return 20 // Dataset and log sink creation second
-	case "terraform-cmek-policy", "terraform-org-policy":
-		return 30 // Org policies third
-	case "bq-cross-project-access", "terraform-bq-scheduled-query":
-		return 40 // IAM bindings and queries fourth (after scope and datasets exist)
-	default:
-		return 50
-	}
-}
 
 var (
 	masterOpts *terraform.Options

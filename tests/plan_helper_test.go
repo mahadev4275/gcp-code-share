@@ -186,30 +186,7 @@ func detectVarFiles(dir string) []string {
 	return varFiles
 }
 
-// buildVarsForModule filters variable assignments to ONLY include variables declared by the target module
-func buildVarsForModule(dir, projectID, region string) map[string]interface{} {
-	declared := getDeclaredVariablesInDir(dir)
-	allPossible := map[string]interface{}{
-		"project_id":     projectID,
-		"project":        projectID,
-		"projects":       []string{projectID},
-		"region":         region,
-		"location":       "global",
-		"dataset_id":     "trace_spans",
-		"sink_name":      "test_sink",
-		"bucket_id":      "test_bucket",
-		"link_id":        "test_link",
-		"retention_days": 30,
-	}
 
-	vars := make(map[string]interface{})
-	for k, v := range allPossible {
-		if declared[k] {
-			vars[k] = v
-		}
-	}
-	return vars
-}
 
 func copyDir(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
