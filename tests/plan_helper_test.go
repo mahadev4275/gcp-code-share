@@ -219,6 +219,9 @@ func generateAmalgamatedComposition(root string) (string, error) {
 		return "", err
 	}
 	runnerDir := filepath.Join(".", "suite_runner")
+	// Clean stale Terraform state to avoid lock file conflicts with updated provider constraints
+	_ = os.Remove(filepath.Join(runnerDir, ".terraform.lock.hcl"))
+	_ = os.RemoveAll(filepath.Join(runnerDir, ".terraform"))
 	modulesDir := filepath.Join(runnerDir, "modules")
 	if err := os.MkdirAll(modulesDir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create suite_runner/modules directory: %w", err)
@@ -232,6 +235,15 @@ func generateAmalgamatedComposition(root string) (string, error) {
 		if err := copyDir(dir, dstDir); err != nil {
 			return "", fmt.Errorf("failed to copy module %s to %s: %w", base, dstDir, err)
 		}
+	}
+
+	// Normalize Trace_scope provider version to be compatible with other modules' ~> 6.0 constraint.
+	// Trace_scope declares ~> 7.0 which conflicts with ~> 6.0; change to >= 6.32.0 (resource GA version).
+	copiedTraceScopeProvider := filepath.Join(modulesDir, "Trace_scope", "provider.tf")
+	if content, err := os.ReadFile(copiedTraceScopeProvider); err == nil {
+		contentStr := string(content)
+		newContent := strings.Replace(contentStr, `"~> 7.0"`, `">= 6.32.0"`, 1)
+		_ = os.WriteFile(copiedTraceScopeProvider, []byte(newContent), 0644)
 	}
 
 	// Add output.tf in copied Trace_scope inside suite_runner/modules/ to expose trace_scope_id from tf_for_scope
