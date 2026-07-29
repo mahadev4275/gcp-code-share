@@ -392,6 +392,9 @@ variable "location" {
 		if declared["projects"] {
 			sb.WriteString("  projects = var.projects\n")
 		}
+		if declared["monitored_projects"] {
+			sb.WriteString("  monitored_projects = var.projects\n")
+		}
 		if declared["region"] {
 			sb.WriteString("  region = var.region\n")
 		}

@@ -26,14 +26,12 @@ func TestPublicAccessRegoPolicyWithTerratest(t *testing.T) {
 		projectID = "mock-project-id" // Fallback for local static plan checking
 	}
 
-	region := os.Getenv("GOOGLE_CLOUD_REGION")
-	if region == "" {
-		region = "us-central1" // Fallback default
-	}
+	planFile := filepath.Join(terraformDir, "tfplan")
 
-	// Define Options
+	// Define Options with PlanFilePath so InitAndPlan formats -var flags correctly
 	terraformOptions := &terraform.Options{
 		TerraformDir: terraformDir,
+		PlanFilePath: planFile,
 	}
 	if isTFQuiet() {
 		terraformOptions.Logger = logger.Discard
@@ -56,24 +54,21 @@ func TestPublicAccessRegoPolicyWithTerratest(t *testing.T) {
 			hasTfvars = true
 		}
 
+		// Only pass the 3 variables that Trace_scope declares: project, monitored_projects, location
 		if !hasTfvars {
 			terraformOptions.Vars = map[string]interface{}{
 				"project":            projectID,
 				"monitored_projects": []string{projectID},
-				"region":             region,
-				"location":           region,
-				"projects":           []string{projectID},
+				"location":           "global",
 			}
 		}
 	}
 
 	terraformOptions = terraform.WithDefaultRetryableErrors(t, terraformOptions)
 
-	// Run terraform init and plan
-	planFile := filepath.Join(terraformDir, "tfplan")
+	// Run terraform init and plan with formatted vars via PlanFilePath
 	ctx := context.Background()
-	terraform.RunTerraformCommandContext(t, ctx, terraformOptions, "init")
-	terraform.RunTerraformCommandContext(t, ctx, terraformOptions, "plan", "-out", planFile)
+	terraform.InitAndPlan(t, terraformOptions)
 
 	// Run terraform show -json tfplan
 	planJSON := terraform.RunTerraformCommandContext(t, ctx, terraformOptions, "show", "-json", planFile)
