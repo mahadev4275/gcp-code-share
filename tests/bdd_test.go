@@ -186,6 +186,7 @@ func TestE2ESuiteFeatures(t *testing.T) {
 			c.registerSegregationOfDutiesSteps(sc)
 			c.registerEncryptionInTransitSteps(sc)
 			c.registerEncryptionComplianceSteps(sc)
+			c.registerGCASteps(sc)
 
 			// Register Terratest lifecycle hooks
 			sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
