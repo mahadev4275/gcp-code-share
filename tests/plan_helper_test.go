@@ -237,13 +237,59 @@ func generateAmalgamatedComposition(root string) (string, error) {
 		}
 	}
 
-	// Normalize Trace_scope provider version to be compatible with other modules' ~> 6.0 constraint.
-	// Trace_scope declares ~> 7.0 which conflicts with ~> 6.0; change to >= 6.32.0 (resource GA version).
+	// Normalize Trace_scope provider version to be compatible with other modules' ~> 6.0 constraint,
+	// and add google-beta provider required for google_observability_trace_scope resource.
 	copiedTraceScopeProvider := filepath.Join(modulesDir, "Trace_scope", "provider.tf")
-	if content, err := os.ReadFile(copiedTraceScopeProvider); err == nil {
+	_ = os.WriteFile(copiedTraceScopeProvider, []byte(`terraform {
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 6.0.0"
+    }
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = ">= 6.0.0"
+    }
+  }
+}
+`), 0644)
+
+	// Patch the nested tf_for_scope module to use google-beta provider for the trace scope resource
+	copiedScopeTF := filepath.Join(modulesDir, "Trace_scope", "modules", "tf_for_scope", "main.tf")
+	if content, err := os.ReadFile(copiedScopeTF); err == nil {
 		contentStr := string(content)
-		newContent := strings.Replace(contentStr, `"~> 7.0"`, `">= 6.32.0"`, 1)
-		_ = os.WriteFile(copiedTraceScopeProvider, []byte(newContent), 0644)
+		if !strings.Contains(contentStr, "provider = google-beta") {
+			newContent := `terraform {
+  required_providers {
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = ">= 6.0.0"
+    }
+  }
+}
+
+` + strings.Replace(contentStr,
+				`resource "google_observability_trace_scope" "observability_trace_scope" {`,
+				`resource "google_observability_trace_scope" "observability_trace_scope" {
+  provider       = google-beta`, 1)
+			_ = os.WriteFile(copiedScopeTF, []byte(newContent), 0644)
+		}
+	}
+
+	// Patch Trace_scope/main.tf to pass the google-beta provider to the nested tf_for_scope module
+	copiedTraceScopeMain := filepath.Join(modulesDir, "Trace_scope", "main.tf")
+	if content, err := os.ReadFile(copiedTraceScopeMain); err == nil {
+		contentStr := string(content)
+		if !strings.Contains(contentStr, "providers") {
+			newContent := strings.Replace(contentStr,
+				`source = "./modules/tf_for_scope"`,
+				`source = "./modules/tf_for_scope"
+
+  providers = {
+    google-beta = google-beta
+  }`, 1)
+			_ = os.WriteFile(copiedTraceScopeMain, []byte(newContent), 0644)
+		}
 	}
 
 	// Add output.tf in copied Trace_scope inside suite_runner/modules/ to expose trace_scope_id from tf_for_scope
@@ -267,12 +313,23 @@ terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = ">= 6.32.0"
+      version = ">= 6.0.0"
+    }
+    google-beta = {
+      source  = "hashicorp/google-beta"
+      version = ">= 6.0.0"
     }
   }
 }
 
 provider "google" {
+  project               = var.project_id
+  region                = var.region
+  user_project_override = true
+  billing_project       = var.project_id
+}
+
+provider "google-beta" {
   project               = var.project_id
   region                = var.region
   user_project_override = true
