@@ -218,13 +218,6 @@ func generateAmalgamatedComposition(root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	// Also discover tf_for_scope if present so it can be copied into suite_runner/modules
-	scopeDir := filepath.Join(root, "tf_for_scope")
-	if _, err := os.Stat(scopeDir); err == nil {
-		dirs = append(dirs, scopeDir)
-	}
-
 	runnerDir := filepath.Join(".", "suite_runner")
 	modulesDir := filepath.Join(runnerDir, "modules")
 	if err := os.MkdirAll(modulesDir, 0755); err != nil {
@@ -238,53 +231,6 @@ func generateAmalgamatedComposition(root string) (string, error) {
 		_ = os.RemoveAll(dstDir)
 		if err := copyDir(dir, dstDir); err != nil {
 			return "", fmt.Errorf("failed to copy module %s to %s: %w", base, dstDir, err)
-		}
-	}
-
-	// Patch copied tf_for_scope inside suite_runner/modules/ to use google-beta provider for trace scope
-	copiedScopeTF := filepath.Join(modulesDir, "tf_for_scope", "main.tf")
-	if content, err := os.ReadFile(copiedScopeTF); err == nil {
-		contentStr := string(content)
-		if !strings.Contains(contentStr, "provider = google-beta") {
-			newContent := `terraform {
-  required_providers {
-    google-beta = {
-      source  = "hashicorp/google-beta"
-      version = ">= 6.0.0"
-    }
-  }
-}
-
-` + strings.Replace(contentStr, `resource "google_observability_trace_scope" "observability_trace_scope" {`, `resource "google_observability_trace_scope" "observability_trace_scope" {
-  provider       = google-beta`, 1)
-			_ = os.WriteFile(copiedScopeTF, []byte(newContent), 0644)
-		}
-	}
-
-	// Patch copied Trace_scope/provider.tf inside suite_runner/modules/ to add google-beta provider
-	copiedTraceScopeProvider := filepath.Join(modulesDir, "Trace_scope", "provider.tf")
-	if content, err := os.ReadFile(copiedTraceScopeProvider); err == nil {
-		contentStr := string(content)
-		if !strings.Contains(contentStr, "google-beta") {
-			newContent := `terraform {
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = ">= 6.0.0"
-    }
-    google-beta = {
-      source  = "hashicorp/google-beta"
-      version = ">= 6.0.0"
-    }
-  }
-}
-
-provider "google-beta" {
-  project = var.project
-  region  = var.region
-}
-`
-			_ = os.WriteFile(copiedTraceScopeProvider, []byte(newContent), 0644)
 		}
 	}
 
@@ -308,8 +254,8 @@ provider "google-beta" {
 terraform {
   required_providers {
     google = {
-      source  = "hashicorp/google-beta"
-      version = ">= 6.0.0"
+      source  = "hashicorp/google"
+      version = ">= 6.32.0"
     }
   }
 }
