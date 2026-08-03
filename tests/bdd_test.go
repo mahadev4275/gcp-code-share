@@ -119,6 +119,8 @@ type bddContext struct {
 	enabledServices       []string
 	serviceNameToVersions map[string][]string
 	traceServiceState     string
+	currentAPI            string
+	currentAPIState       string
 	tfOpts                *terraform.Options
 	allModuleTfOpts       []*terraform.Options
 	t                     *testing.T
