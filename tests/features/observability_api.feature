@@ -6,5 +6,11 @@ Feature: [E2E Suite] GCP Observability API Enablement Check
 
   Scenario: Verify Cloud Trace API is enabled
     Given the GCP project ID is configured
-    When I check the status of the Cloud "Observability" API
-    Then the Observability API state should be "ENABLED"
+    When I check the status of "<api>" API
+    Then the Observability API state should be "<state>"
+
+    Examples:
+    | api                   | state            |
+    | observability         | ENABLED          |
+    | geminicloudassist     | ENABLED          |
+    | cloudaicompanion      | ENABLED          |
