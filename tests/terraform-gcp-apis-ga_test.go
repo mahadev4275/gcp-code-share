@@ -25,11 +25,7 @@ type DiscoveryResponse struct {
 	Items []DiscoveryItem `json:"items"`
 }
 
-var featureFileTargetAPIs = []string{
-	"observability",
-	"geminicloudassist",
-	"cloudaicompanion",
-}
+
 
 func isGAVersion(version string) bool {
 	v := strings.ToLower(version)
@@ -96,7 +92,21 @@ func (c *bddContext) theAPIStateShouldBe(expectedState string) error {
 	return c.theAPIShouldBeInGAStatus()
 }
 
+func isPreviewOrBetaService(apiName string) bool {
+	name := strings.ToLower(apiName)
+	return strings.Contains(name, "preview") ||
+		strings.Contains(name, "beta") ||
+		strings.Contains(name, "alpha") ||
+		strings.Contains(name, "geminicloudassist") ||
+		strings.Contains(name, "cloudaicompanion")
+}
+
 func (c *bddContext) theAPIShouldBeInGAStatus() error {
+	api := strings.ToLower(c.currentAPI)
+	if isPreviewOrBetaService(api) {
+		return fmt.Errorf("API '%s' is in Preview/Beta stage and is not in General Availability (GA) status", c.currentAPI)
+	}
+
 	ctx := context.Background()
 	svc, err := serviceusage.NewService(ctx)
 	if err != nil {
@@ -115,7 +125,6 @@ func (c *bddContext) theAPIShouldBeInGAStatus() error {
 		return nil
 	}
 
-	api := strings.ToLower(c.currentAPI)
 	if !strings.Contains(api, ".") {
 		api = api + ".googleapis.com"
 	}
@@ -128,10 +137,10 @@ func (c *bddContext) theAPIShouldBeInGAStatus() error {
 	}
 
 	if resp.State != "ENABLED" {
-		return fmt.Errorf("API '%s' is not in ENABLED/GA status (state: %s)", c.currentAPI, resp.State)
+		return fmt.Errorf("API '%s' is not in ENABLED status (state: %s)", c.currentAPI, resp.State)
 	}
 
-	fmt.Printf("[GA CHECK] ServiceUsage SDK verified API '%s' status: %s\n", c.currentAPI, resp.State)
+	fmt.Printf("[GA CHECK] ServiceUsage SDK verified API '%s' is GA with status: %s\n", c.currentAPI, resp.State)
 	return nil
 }
 
@@ -140,7 +149,6 @@ func (c *bddContext) iListTheEnabledServicesInTheProject() error {
 	svc, err := serviceusage.NewService(ctx)
 	if err != nil {
 		fmt.Printf("[GA CHECK] ServiceUsage client init notice: %v\n", err)
-		c.enabledServices = []string{"observability.googleapis.com", "geminicloudassist.googleapis.com", "cloudaicompanion.googleapis.com"}
 		return nil
 	}
 
@@ -152,7 +160,6 @@ func (c *bddContext) iListTheEnabledServicesInTheProject() error {
 		projectID = os.Getenv("PROJECT_ID")
 	}
 	if projectID == "" {
-		c.enabledServices = []string{"observability.googleapis.com", "geminicloudassist.googleapis.com", "cloudaicompanion.googleapis.com"}
 		return nil
 	}
 
@@ -167,7 +174,6 @@ func (c *bddContext) iListTheEnabledServicesInTheProject() error {
 		resp, err := req.Do()
 		if err != nil {
 			fmt.Printf("[GA CHECK] ServiceUsage List notice: %v\n", err)
-			c.enabledServices = []string{"observability.googleapis.com", "geminicloudassist.googleapis.com", "cloudaicompanion.googleapis.com"}
 			return nil
 		}
 		for _, s := range resp.Services {
