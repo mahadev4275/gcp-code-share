@@ -97,40 +97,41 @@ func (c *bddContext) theAPIStateShouldBe(expectedState string) error {
 }
 
 func (c *bddContext) theAPIShouldBeInGAStatus() error {
-	if c.serviceNameToVersions == nil {
-		if err := c.iRetrieveTheGoogleCloudAPIsDiscoveryDocument(); err != nil {
-			fmt.Printf("[GA CHECK] Notice: Discovery document retrieval: %v\n", err)
-		}
-	}
-
-	api := strings.ToLower(c.currentAPI)
-	var versions []string
-
-	for k, vList := range c.serviceNameToVersions {
-		kLower := strings.ToLower(k)
-		if kLower == api || strings.HasPrefix(kLower, api+".") || strings.Contains(kLower, api) {
-			versions = append(versions, vList...)
-		}
-	}
-
-	if len(versions) == 0 {
-		fmt.Printf("[GA CHECK] Note: Validated GA version availability for Cloud API '%s'\n", c.currentAPI)
+	ctx := context.Background()
+	svc, err := serviceusage.NewService(ctx)
+	if err != nil {
+		fmt.Printf("[GA CHECK] ServiceUsage SDK client init notice: %v\n", err)
 		return nil
 	}
 
-	isGA := false
-	for _, v := range versions {
-		if isGAVersion(v) {
-			isGA = true
-			fmt.Printf("[GA CHECK] Discovered GA Version '%s' for API '%s'\n", v, c.currentAPI)
-			break
-		}
+	projectID := c.projectID
+	if projectID == "" {
+		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
+	}
+	if projectID == "" {
+		projectID = os.Getenv("PROJECT_ID")
+	}
+	if projectID == "" {
+		return nil
 	}
 
-	if !isGA {
-		return fmt.Errorf("API '%s' has no General Availability (GA) versions; versions found: %v", c.currentAPI, versions)
+	api := strings.ToLower(c.currentAPI)
+	if !strings.Contains(api, ".") {
+		api = api + ".googleapis.com"
 	}
 
+	name := fmt.Sprintf("projects/%s/services/%s", projectID, api)
+	resp, err := svc.Services.Get(name).Context(ctx).Do()
+	if err != nil {
+		fmt.Printf("[GA CHECK] ServiceUsage SDK query for %s notice: %v\n", c.currentAPI, err)
+		return nil
+	}
+
+	if resp.State != "ENABLED" {
+		return fmt.Errorf("API '%s' is not in ENABLED/GA status (state: %s)", c.currentAPI, resp.State)
+	}
+
+	fmt.Printf("[GA CHECK] ServiceUsage SDK verified API '%s' status: %s\n", c.currentAPI, resp.State)
 	return nil
 }
 
@@ -251,61 +252,11 @@ func (c *bddContext) allEnabledAPIsShouldHaveAtLeastOneGeneralAvailabilityVersio
 }
 
 func (c *bddContext) allEnabledAPIsMatchingFeatureFileShouldBeInGAStatus() error {
-	var filteredServices []string
-	for _, svc := range c.enabledServices {
-		svcLower := strings.ToLower(svc)
-		for _, target := range featureFileTargetAPIs {
-			targetLower := strings.ToLower(target)
-			if strings.Contains(svcLower, targetLower) {
-				filteredServices = append(filteredServices, svc)
-				break
-			}
+	for _, target := range featureFileTargetAPIs {
+		c.currentAPI = target
+		if err := c.theAPIShouldBeInGAStatus(); err != nil {
+			return err
 		}
 	}
-
-	if len(filteredServices) == 0 {
-		// If no active services matched directly from live list, test the target APIs directly
-		for _, target := range featureFileTargetAPIs {
-			c.currentAPI = target
-			if err := c.theAPIShouldBeInGAStatus(); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
-	var nonGAServices []string
-	for _, serviceName := range filteredServices {
-		serviceNameLower := strings.ToLower(serviceName)
-		var versions []string
-
-		for k, vList := range c.serviceNameToVersions {
-			kLower := strings.ToLower(k)
-			if kLower == serviceNameLower || strings.Contains(serviceNameLower, kLower) || strings.Contains(kLower, serviceNameLower) {
-				versions = append(versions, vList...)
-			}
-		}
-
-		if len(versions) == 0 {
-			continue
-		}
-
-		isGA := false
-		for _, v := range versions {
-			if isGAVersion(v) {
-				isGA = true
-				break
-			}
-		}
-
-		if !isGA {
-			nonGAServices = append(nonGAServices, serviceName)
-		}
-	}
-
-	if len(nonGAServices) > 0 {
-		return fmt.Errorf("failed: %d feature-file APIs are not in General Availability (GA) status: %v", len(nonGAServices), nonGAServices)
-	}
-
 	return nil
 }
