@@ -33,14 +33,11 @@ func isGAVersion(version string) bool {
 }
 
 func (c *bddContext) registerGAPISteps(sc *godog.ScenarioContext) {
+	sc.Step(`^I list the enabled services in the project$`, c.iListTheEnabledServicesInTheProject)
 	sc.Step(`^I check the status of (?:the )?(?:Cloud )?"([^"]*)" API$`, c.iCheckTheStatusOfAPI)
 	sc.Step(`^the (?:Observability )?API state (?:should|must) be "([^"]*)"$`, c.theAPIStateShouldBe)
 	sc.Step(`^the (?:Observability )?API (?:should|must) be in General Availability status$`, c.theAPIShouldBeInGAStatus)
-	sc.Step(`^I list the enabled services in the project$`, c.iListTheEnabledServicesInTheProject)
-	sc.Step(`^I list the enabled services in the project using serviceusage$`, c.iListTheEnabledServicesInTheProject)
-	sc.Step(`^I retrieve the Google Cloud APIs Discovery document$`, c.iRetrieveTheGoogleCloudAPIsDiscoveryDocument)
 	sc.Step(`^all enabled APIs should have at least one General Availability version$`, c.allEnabledAPIsShouldHaveAtLeastOneGeneralAvailabilityVersion)
-	sc.Step(`^all enabled APIs matching feature file should be in General Availability status$`, c.allEnabledAPIsMatchingFeatureFileShouldBeInGAStatus)
 }
 
 func (c *bddContext) iCheckTheStatusOfAPI(apiName string) error {
@@ -253,16 +250,6 @@ func (c *bddContext) allEnabledAPIsShouldHaveAtLeastOneGeneralAvailabilityVersio
 
 	if len(nonGAServices) > 0 {
 		return fmt.Errorf("failed: %d enabled GCP APIs are not in General Availability (GA) status: %v", len(nonGAServices), nonGAServices)
-	}
-	return nil
-}
-
-func (c *bddContext) allEnabledAPIsMatchingFeatureFileShouldBeInGAStatus() error {
-	for _, target := range featureFileTargetAPIs {
-		c.currentAPI = target
-		if err := c.theAPIShouldBeInGAStatus(); err != nil {
-			return err
-		}
 	}
 	return nil
 }
