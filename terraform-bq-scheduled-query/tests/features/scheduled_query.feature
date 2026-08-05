@@ -1,4 +1,4 @@
-@CR.SECURITY.034 @CR.SECURITY.035 @CR.ARCHITECTURE.001 @opa
+@CR.SECURITY.034 @CR.SECURITY.035 @CR.ARCHITECTURE.001 @opa @bigquery
 Feature: [BigQuery Scheduled Query] Service Account Least Privilege
   Requirement ID: CR.SECURITY.034, CR.SECURITY.035, CR.ARCHITECTURE.001
   As a GCP security compliance officer

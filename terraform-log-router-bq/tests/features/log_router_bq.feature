@@ -1,4 +1,4 @@
-@CR.SECURITY.009 @CR.SECURITY.034 @CR.SECURITY.002 @opa
+@CR.SECURITY.009 @CR.SECURITY.034 @CR.SECURITY.002 @opa @bigquery
 Feature: [Log Router BQ] BigQuery Sink CMEK & IAM Least Privilege
   Requirement ID: CR.SECURITY.009, CR.SECURITY.034, CR.SECURITY.002
   As a GCP log security officer

@@ -1,4 +1,4 @@
-@CR.SECURITY.009 @CR.SECURITY.037 @CR.ARCHITECTURE.001 @opa
+@CR.SECURITY.009 @CR.SECURITY.037 @CR.ARCHITECTURE.001 @opa @bigquery
 Feature: [Log Bucket BQ Link] Security & CMEK Encryption
   Requirement ID: CR.SECURITY.009, CR.SECURITY.037, CR.ARCHITECTURE.001
   As a GCP cloud architect

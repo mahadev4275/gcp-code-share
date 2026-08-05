@@ -1,4 +1,4 @@
-@CR.ARCHITECTURE.001 @CR.SECURITY.002 @opa
+@CR.ARCHITECTURE.001 @CR.SECURITY.002 @opa @bigquery
 Feature: [SQL Alert Module] GA API & Alert Policy Compliance
   Requirement ID: CR.ARCHITECTURE.001, CR.SECURITY.002
   As a GCP Observability Architect

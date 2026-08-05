@@ -1,4 +1,4 @@
-@CR.SECURITY.034 @CR.SECURITY.037 @opa
+@CR.SECURITY.034 @CR.SECURITY.037 @opa @bigquery
 Feature: [BigQuery Cross-Project] IAM Access & Public Access Compliance
   Requirement ID: CR.SECURITY.034, CR.SECURITY.037
   As a GCP security administrator
