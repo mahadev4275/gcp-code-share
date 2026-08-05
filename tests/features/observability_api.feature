@@ -1,4 +1,4 @@
-@live @obs_api @observability
+@live @obs_api
 Feature: [E2E Suite] GCP Observability API Enablement Check
   As a GCP administrator
   I want to ensure that the observability API is enabled

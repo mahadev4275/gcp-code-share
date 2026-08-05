@@ -1,4 +1,4 @@
-@opa @public_access @bigquery @observability
+@opa @public_access
 Feature: [E2E Suite] GCP Resource Public Access Prevention Check
   As a GCP administrator
   I want to ensure that logging, tracing, and observability bucket data are not public
