@@ -1,4 +1,5 @@
 resource "google_observability_trace_scope" "observability_trace_scope" {
+  project        = var.project
   trace_scope_id = "test_scope"
   location       = var.location
 
