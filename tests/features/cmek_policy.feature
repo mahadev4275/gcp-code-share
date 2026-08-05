@@ -1,4 +1,4 @@
-@opa @cmek
+@opa @cmek @bigquery @observability
 Feature: [E2E Suite] CMEK Policy for Infrastructure Data at Rest
 
   As a Security Administrator,

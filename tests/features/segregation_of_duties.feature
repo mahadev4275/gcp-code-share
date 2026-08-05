@@ -1,4 +1,4 @@
-@opa @segregation_of_duties
+@opa @segregation_of_duties @bigquery @observability
 Feature: [E2E Suite] Segregation of Duties & IAM Role Restrictions
   As a GCP security administrator
   I want to enforce segregation of duties in IAM policies

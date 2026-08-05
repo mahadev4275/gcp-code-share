@@ -1,4 +1,4 @@
-@opa @encryption_in_transit
+@opa @encryption_in_transit @bigquery @observability
 Feature: [E2E Suite] Encryption in Transit & Protocol Compliance
   As a GCP Security Administrator
   I want to ensure all data in transit across external, internal, and database communication channels is encrypted

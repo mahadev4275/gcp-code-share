@@ -1,4 +1,4 @@
-@gca @live
+@gca @live @observability
 Feature: Gemini for Google Cloud API (GCA) Compliance Verification
   As a GCP Security Administrator
   I want to verify that Gemini for Google Cloud API (cloudaicompanion.googleapis.com) meets all live API architecture and security standards
