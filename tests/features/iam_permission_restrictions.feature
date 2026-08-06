@@ -1,4 +1,4 @@
-@live @iam_restrictions
+@iam_restrictions
 Feature: [E2E Suite] IAM Permission Restrictions Check
   As a GCP security administrator
   I want to ensure IAM permission restrictions are enforced in Terraform configurations
