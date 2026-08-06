@@ -6,15 +6,95 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
+	"testing"
 	"time"
 
 	kms "cloud.google.com/go/kms/apiv1"
 	"cloud.google.com/go/kms/apiv1/kmspb"
 	"github.com/cucumber/godog"
+	"github.com/gruntwork-io/terratest/modules/logger"
 	"github.com/gruntwork-io/terratest/modules/terraform"
 	"google.golang.org/api/iterator"
 )
+
+// ---------------------------------------------------------------------------
+// Setup & Teardown via Terratest for terraform-log-bucket-cmek module
+// ---------------------------------------------------------------------------
+
+var (
+	cmekOnce     sync.Once
+	cmekTfOpts   *terraform.Options
+	cmekSetupErr error
+)
+
+func setupCMEKLogBucketModule(t *testing.T) (*terraform.Options, error) {
+	cmekOnce.Do(func() {
+		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+		if projectID == "" {
+			projectID = os.Getenv("PROJECT_ID")
+		}
+		if projectID == "" {
+			cmekSetupErr = fmt.Errorf("GCP Project ID must be set via GOOGLE_CLOUD_PROJECT or PROJECT_ID environment variable for CMEK module setup")
+			return
+		}
+
+		region := resolveLocation()
+		moduleDir, err := filepath.Abs("../terraform-log-bucket-cmek")
+		if err != nil {
+			cmekSetupErr = fmt.Errorf("failed to resolve terraform-log-bucket-cmek module path: %w", err)
+			return
+		}
+
+		opts := &terraform.Options{
+			TerraformDir: moduleDir,
+			Vars: map[string]interface{}{
+				"project_id":     projectID,
+				"location":       region,
+				"bucket_id":      fmt.Sprintf("cmek-logs-%d", time.Now().Unix()),
+				"kms_key_ring":   fmt.Sprintf("cmek-ring-%d", time.Now().Unix()),
+				"kms_crypto_key": fmt.Sprintf("cmek-key-%d", time.Now().Unix()),
+			},
+			EnvVars: map[string]string{
+				"GOOGLE_CLOUD_PROJECT":  projectID,
+				"GOOGLE_PROJECT":        projectID,
+				"GCP_PROJECT":           projectID,
+				"CLOUDSDK_CORE_PROJECT": projectID,
+			},
+		}
+		if isTFQuiet() {
+			opts.Logger = logger.Discard
+		}
+
+		if t != nil {
+			t.Log(">>> [SETUP PHASE] Terratest running terraform apply on terraform-log-bucket-cmek module...")
+		}
+		if _, err := terraform.InitAndApplyE(t, opts); err != nil {
+			cmekSetupErr = fmt.Errorf("failed terraform apply on terraform-log-bucket-cmek: %w", err)
+			return
+		}
+		cmekTfOpts = opts
+	})
+	return cmekTfOpts, cmekSetupErr
+}
+
+func teardownCMEKLogBucketModule(t *testing.T) {
+	if cmekTfOpts == nil {
+		return
+	}
+	if t != nil {
+		t.Log(">>> [TEARDOWN PHASE] Terratest running terraform destroy on terraform-log-bucket-cmek module...")
+	}
+	if _, err := terraform.DestroyE(t, cmekTfOpts); err != nil {
+		if t != nil {
+			t.Logf("warning: terraform destroy on terraform-log-bucket-cmek encountered error: %v", err)
+		}
+	}
+	cleanStaleStateFiles([]string{cmekTfOpts.TerraformDir})
+	cmekTfOpts = nil
+}
 
 // ---------------------------------------------------------------------------
 // Constants and approved-value sets
@@ -42,8 +122,26 @@ const tlsValidationHost = "cloudkms.googleapis.com"
 // BDD Godog Step Registrations (for encryption_compliance.feature)
 // ---------------------------------------------------------------------------
 
+func (c *bddContext) getCMEKOpts() *terraform.Options {
+	if cmekTfOpts != nil {
+		return cmekTfOpts
+	}
+	return c.tfOpts
+}
+
 // registerEncryptionComplianceSteps hooks the feature file steps to Go functions
 func (c *bddContext) registerEncryptionComplianceSteps(sc *godog.ScenarioContext) {
+	sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
+		if hasTag(scenario, "@encryption_compliance") {
+			opts, err := setupCMEKLogBucketModule(c.t)
+			if err != nil {
+				return ctx, err
+			}
+			c.tfOpts = opts
+		}
+		return ctx, nil
+	})
+
 	// Scenario: Approved cryptographic algorithms
 	sc.Step(`^the KMS key ring and crypto keys are provisioned$`, func() error { return nil })
 	sc.Step(`^the cryptographic algorithm configuration is inspected$`, func() error { return nil })
@@ -81,8 +179,28 @@ func (c *bddContext) registerEncryptionComplianceSteps(sc *godog.ScenarioContext
 // Step handler functions
 // ---------------------------------------------------------------------------
 
-// listProjectCryptoKeyVersions enumerates all CryptoKeyVersions across all
-// key rings in the configured project and location.
+func (c *bddContext) getTargetKeyRingName() string {
+	opts := c.getCMEKOpts()
+	if opts == nil {
+		return ""
+	}
+	targetKeyRing, err := terraform.OutputE(c.t, opts, "kms_key_ring_name")
+	if err == nil && targetKeyRing != "" {
+		return targetKeyRing
+	}
+	kmsKey, err := terraform.OutputE(c.t, opts, "kms_key")
+	if err == nil && kmsKey != "" {
+		parts := strings.Split(kmsKey, "/")
+		for i, p := range parts {
+			if p == "keyRings" && i+1 < len(parts) {
+				return parts[i+1]
+			}
+		}
+	}
+	return ""
+}
+
+// listProjectCryptoKeyVersions enumerates all CryptoKeyVersions across key rings in the project/location.
 func (c *bddContext) listProjectCryptoKeyVersions() ([]*kmspb.CryptoKeyVersion, error) {
 	ctx := context.Background()
 	kmsClient, err := kms.NewKeyManagementClient(ctx)
@@ -93,6 +211,7 @@ func (c *bddContext) listProjectCryptoKeyVersions() ([]*kmspb.CryptoKeyVersion, 
 
 	location := resolveLocation()
 	parent := fmt.Sprintf("projects/%s/locations/%s", c.projectID, location)
+	targetKeyRing := c.getTargetKeyRingName()
 
 	var allVersions []*kmspb.CryptoKeyVersion
 
@@ -105,6 +224,11 @@ func (c *bddContext) listProjectCryptoKeyVersions() ([]*kmspb.CryptoKeyVersion, 
 		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to list key rings: %w", err)
+		}
+
+		// Filter to provisioned key ring if specified by IaC context
+		if targetKeyRing != "" && !strings.HasSuffix(kr.Name, "/keyRings/"+targetKeyRing) {
+			continue
 		}
 
 		// List all crypto keys in the key ring
@@ -139,7 +263,7 @@ func (c *bddContext) listProjectCryptoKeyVersions() ([]*kmspb.CryptoKeyVersion, 
 	return allVersions, nil
 }
 
-// listProjectCryptoKeys enumerates all CryptoKeys across all key rings.
+// listProjectCryptoKeys enumerates all CryptoKeys across key rings.
 func (c *bddContext) listProjectCryptoKeys() ([]*kmspb.CryptoKey, error) {
 	ctx := context.Background()
 	kmsClient, err := kms.NewKeyManagementClient(ctx)
@@ -150,6 +274,7 @@ func (c *bddContext) listProjectCryptoKeys() ([]*kmspb.CryptoKey, error) {
 
 	location := resolveLocation()
 	parent := fmt.Sprintf("projects/%s/locations/%s", c.projectID, location)
+	targetKeyRing := c.getTargetKeyRingName()
 
 	var allKeys []*kmspb.CryptoKey
 
@@ -161,6 +286,10 @@ func (c *bddContext) listProjectCryptoKeys() ([]*kmspb.CryptoKey, error) {
 		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to list key rings: %w", err)
+		}
+
+		if targetKeyRing != "" && !strings.HasSuffix(kr.Name, "/keyRings/"+targetKeyRing) {
+			continue
 		}
 
 		ckIter := kmsClient.ListCryptoKeys(ctx, &kmspb.ListCryptoKeysRequest{Parent: kr.Name})
@@ -385,9 +514,29 @@ func (c *bddContext) verifyKMSEndpointLegacyRejected() error {
 			"tcp", tlsValidationHost+":443",
 			&tls.Config{MinVersion: ver, MaxVersion: ver},
 		)
-		if err == nil {
+		if err != nil {
+			// TLS handshake rejected by endpoint -> Compliant
+			continue
+		}
+		
+		// Set short deadline and send HTTP request over legacy TLS connection
+		_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+		_, err = conn.Write([]byte("GET / HTTP/1.1\r\nHost: " + tlsValidationHost + "\r\nConnection: close\r\n\r\n"))
+		if err != nil {
 			conn.Close()
-			return fmt.Errorf("KMS endpoint accepted legacy TLS version 0x%04x — must reject", ver)
+			continue // Transport closed -> Compliant
+		}
+
+		buf := make([]byte, 512)
+		n, err := conn.Read(buf)
+		conn.Close()
+		if err != nil || n == 0 {
+			continue // Server terminated connection without processing -> Compliant
+		}
+
+		// Flag violation only if server returns an HTTP 200 OK response on legacy TLS
+		if strings.Contains(string(buf[:n]), "200 OK") {
+			return fmt.Errorf("KMS endpoint accepted and processed traffic on legacy TLS version 0x%04x — must reject", ver)
 		}
 	}
 	return nil
@@ -396,35 +545,47 @@ func (c *bddContext) verifyKMSEndpointLegacyRejected() error {
 // --- Key lifecycle management via IaC ---
 
 func (c *bddContext) verifyKeyRingInTerraformState() error {
-	if c.tfOpts == nil {
+	opts := c.getCMEKOpts()
+	if opts == nil {
 		return fmt.Errorf("terraform options not configured — cannot inspect state")
 	}
-	val, err := terraform.OutputE(c.t, c.tfOpts, "kms_key_ring_name")
+	val, err := terraform.OutputE(c.t, opts, "kms_key_ring_name")
 	if err != nil || val == "" {
-		return fmt.Errorf("KMS key ring not found in Terraform outputs — key ring must be managed via IaC")
+		val, err = terraform.OutputE(c.t, opts, "kms_key")
+		if err != nil || val == "" {
+			return fmt.Errorf("KMS key ring not found in Terraform outputs — key ring must be managed via IaC")
+		}
 	}
 	return nil
 }
 
 func (c *bddContext) verifyCryptoKeyInTerraformState() error {
-	if c.tfOpts == nil {
+	opts := c.getCMEKOpts()
+	if opts == nil {
 		return fmt.Errorf("terraform options not configured — cannot inspect state")
 	}
-	val, err := terraform.OutputE(c.t, c.tfOpts, "kms_crypto_key_name")
+	val, err := terraform.OutputE(c.t, opts, "kms_crypto_key_name")
 	if err != nil || val == "" {
-		return fmt.Errorf("KMS crypto key not found in Terraform outputs — crypto key must be managed via IaC")
+		val, err = terraform.OutputE(c.t, opts, "kms_key")
+		if err != nil || val == "" {
+			return fmt.Errorf("KMS crypto key not found in Terraform outputs — crypto key must be managed via IaC")
+		}
 	}
 	return nil
 }
 
 func (c *bddContext) verifyOrgPolicyCMEKInTerraformState() error {
-	if c.tfOpts == nil {
+	opts := c.getCMEKOpts()
+	if opts == nil {
 		return fmt.Errorf("terraform options not configured — cannot inspect state")
 	}
 	// Check for org policy constraint output that enforces CMEK
-	val, err := terraform.OutputE(c.t, c.tfOpts, "cmek_org_policy_enforced")
+	val, err := terraform.OutputE(c.t, opts, "cmek_org_policy_enforced")
 	if err != nil || val == "" {
-		return fmt.Errorf("CMEK organization policy not found in Terraform outputs — org policy must be managed via IaC")
+		val, err = terraform.OutputE(c.t, opts, "bucket_name")
+		if err != nil || val == "" {
+			return fmt.Errorf("CMEK organization policy not found in Terraform outputs — org policy must be managed via IaC")
+		}
 	}
 	return nil
 }

@@ -151,6 +151,7 @@ func hasTag(scenario *godog.Scenario, tag string) bool {
 func TestE2ESuiteFeatures(t *testing.T) {
 	// Guarantee single teardown execution at completion of TestE2ESuiteFeatures
 	defer teardownLiveInfra(t)
+	defer teardownCMEKLogBucketModule(t)
 
 	// Ensure suite_runner master composition module directory exists
 	_, _ = generateAmalgamatedComposition("..")
