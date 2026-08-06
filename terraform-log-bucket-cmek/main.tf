@@ -35,9 +35,12 @@ resource "google_kms_crypto_key" "logging" {
   name            = var.kms_crypto_key
   key_ring        = google_kms_key_ring.logging.id
   rotation_period = "7776000s"
-
+  version_template {
+    protection_level = "HSM"
+    algorithm = "GOOGLE_SYMMETRIC_ENCRYPTION"
+  }
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 }
 
