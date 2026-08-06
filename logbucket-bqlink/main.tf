@@ -4,11 +4,9 @@ module "log_analytics" {
 
   project_id = var.project_id
 
-  bucket_id = "log23obs"
+  bucket_id  = "observability-log-bucket"
 
-  location = "global"
+  dataset_id = "log_analytics_dataset"
 
-  retention_days = 30
-
-  link_id = "observability_link"
+  location = "us-central1"
 }
