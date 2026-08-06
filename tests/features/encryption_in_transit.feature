@@ -42,3 +42,9 @@ Feature: [E2E Suite] Encryption in Transit & Protocol Compliance
     When an API request is sent to the Observability API using an unsafe http scheme
     Then the request must be rejected by the server
     And live Observability API endpoints must mandate TLS version 1.2 or higher
+
+  Scenario: BigQuery API rejects insecure http scheme and mandates TLS 1.2 or higher
+    Given the GCP project ID is configured
+    When an API request is sent to the BigQuery API using an unsafe http scheme
+    Then the BigQuery request must be rejected by the server
+    And live BigQuery API endpoints must mandate TLS version 1.2 or higher

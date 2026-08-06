@@ -60,6 +60,11 @@ func (c *bddContext) registerEncryptionInTransitSteps(sc *godog.ScenarioContext)
 	sc.Step(`^an API request is sent to the Observability API using an unsafe http scheme$`, func() error { return nil })
 	sc.Step(`^the request must be rejected by the server$`, c.verifyObservabilityAPIRejectsUnsafeSchemeLive)
 	sc.Step(`^live Observability API endpoints must mandate TLS version 1\.2 or higher$`, c.verifyObservabilityAPIMandatesTLS12Live)
+
+	// Live BigQuery API HTTP Rejection & TLS 1.2+ steps
+	sc.Step(`^an API request is sent to the BigQuery API using an unsafe http scheme$`, func() error { return nil })
+	sc.Step(`^the BigQuery request must be rejected by the server$`, c.verifyBigQueryAPIRejectsUnsafeSchemeLive)
+	sc.Step(`^live BigQuery API endpoints must mandate TLS version 1\.2 or higher$`, c.verifyBigQueryAPIMandatesTLS12Live)
 }
 
 // -----------------------------------------------------------------------------
@@ -201,6 +206,44 @@ func (c *bddContext) verifyObservabilityAPIMandatesTLS12Live() error {
 	state := conn.ConnectionState()
 	if state.Version < tls.VersionTLS12 {
 		return fmt.Errorf("Observability API TLS version %x is below required TLS 1.2", state.Version)
+	}
+	return nil
+}
+
+func (c *bddContext) verifyBigQueryAPIRejectsUnsafeSchemeLive() error {
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp, err := client.Get("http://bigquery.googleapis.com/")
+	if err != nil {
+		// Connection rejected / failed -> PASS (unencrypted HTTP rejected)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	// HTTP 404, 403, 301, 302, 400 demonstrate that unencrypted HTTP API requests are rejected
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	return fmt.Errorf("BigQuery API accepted unencrypted HTTP request without rejection (status code: %d)", resp.StatusCode)
+}
+
+func (c *bddContext) verifyBigQueryAPIMandatesTLS12Live() error {
+	conn, err := tls.Dial("tcp", "bigquery.googleapis.com:443", &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to connect to BigQuery API over TLS 1.2+: %w", err)
+	}
+	defer conn.Close()
+
+	state := conn.ConnectionState()
+	if state.Version < tls.VersionTLS12 {
+		return fmt.Errorf("BigQuery API TLS version %x is below required TLS 1.2", state.Version)
 	}
 	return nil
 }
