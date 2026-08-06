@@ -15,3 +15,4 @@ Feature: [E2E Suite] GCP APIs General Availability Check
     | observability         | ENABLED          |
     | geminicloudassist     | ENABLED          |
     | cloudaicompanion      | ENABLED          |
+    | bigquery              | ENABLED          |
