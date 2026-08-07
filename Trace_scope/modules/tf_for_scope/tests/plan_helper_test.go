@@ -45,10 +45,11 @@ func generateModulePlanJSON(t *testing.T) (string, []PlanResourceChange, error) 
 	tfOpts := &terraform.Options{
 		TerraformDir: dir,
 		Vars: map[string]interface{}{
-			"project":  projectID,
-			"projects": []string{projectID},
-			"location": "global",
-			"region":   "us-central1",
+			"project":            projectID,
+			"monitored_projects": []string{projectID},
+			"projects":           []string{projectID},
+			"location":           "global",
+			"region":             "us-central1",
 		},
 		EnvVars: map[string]string{
 			"GOOGLE_CLOUD_PROJECT":  projectID,
