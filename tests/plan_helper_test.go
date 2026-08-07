@@ -16,6 +16,22 @@ import (
 	"github.com/gruntwork-io/terratest/modules/terraform"
 )
 
+// getModuleFilter parses the -tf.modules flag into a list of module directory names.
+// Returns nil when no filter is specified (all modules are included).
+func getModuleFilter() []string {
+	if tfModulesFlag == nil || *tfModulesFlag == "" {
+		return nil
+	}
+	var modules []string
+	for _, m := range strings.Split(*tfModulesFlag, ",") {
+		m = strings.TrimSpace(m)
+		if m != "" {
+			modules = append(modules, m)
+		}
+	}
+	return modules
+}
+
 type PlanResourceChange struct {
 	Address string `json:"address"`
 	Type    string `json:"type"`
@@ -32,9 +48,9 @@ type PlanJSON struct {
 }
 
 var (
-	repoPlanChangesOnce sync.Once
-	cachedPlanChanges   []PlanResourceChange
-	cachedPlanErr       error
+	planCacheMutex  sync.Mutex
+	planCacheMap    = make(map[string][]PlanResourceChange)
+	planCacheErrMap = make(map[string]error)
 )
 
 func getPlanResourceChanges(t *testing.T, dir string, vars map[string]interface{}) ([]PlanResourceChange, error) {
@@ -212,11 +228,27 @@ func copyDir(src, dst string) error {
 	})
 }
 
-// generateAmalgamatedComposition creates a master composition Terraform module in tests/suite_runner/main.tf
-func generateAmalgamatedComposition(root string) (string, error) {
+// generateAmalgamatedComposition creates a composition Terraform module in tests/suite_runner/main.tf.
+// When moduleFilter is non-empty, only the specified module directories are included in the plan.
+func generateAmalgamatedComposition(root string, moduleFilter []string) (string, error) {
 	dirs, err := discoverTerraformModuleDirs(root)
 	if err != nil {
 		return "", err
+	}
+
+	// Filter to only specified modules when -tf.modules flag is set
+	if len(moduleFilter) > 0 {
+		filterSet := make(map[string]bool)
+		for _, m := range moduleFilter {
+			filterSet[m] = true
+		}
+		var filtered []string
+		for _, dir := range dirs {
+			if filterSet[filepath.Base(dir)] {
+				filtered = append(filtered, dir)
+			}
+		}
+		dirs = filtered
 	}
 	runnerDir := filepath.Join(".", "suite_runner")
 	// Clean stale Terraform state to avoid lock file conflicts with updated provider constraints
@@ -419,46 +451,64 @@ variable "location" {
 	return runnerDir, nil
 }
 
-// getRepositoryPlanChanges runs terraform plan on the master composition module with sync.Once caching
+// getRepositoryPlanChanges runs terraform plan on the composition module with per-filter caching
 func getRepositoryPlanChanges(t *testing.T) ([]PlanResourceChange, error) {
-	repoPlanChangesOnce.Do(func() {
-		projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-		if projectID == "" {
-			projectID = os.Getenv("PROJECT_ID")
-		}
-		if projectID == "" {
-			cachedPlanErr = fmt.Errorf("GCP Project ID must be set via GOOGLE_CLOUD_PROJECT or PROJECT_ID environment variable")
-			return
-		}
+	filterKey := strings.Join(getModuleFilter(), ",")
+	planCacheMutex.Lock()
+	if changes, ok := planCacheMap[filterKey]; ok {
+		err := planCacheErrMap[filterKey]
+		planCacheMutex.Unlock()
+		return changes, err
+	}
+	planCacheMutex.Unlock()
 
-		region := os.Getenv("GOOGLE_CLOUD_REGION")
-		if region == "" {
-			region = "us-central1"
-		}
+	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
+	if projectID == "" {
+		projectID = os.Getenv("PROJECT_ID")
+	}
+	if projectID == "" {
+		err := fmt.Errorf("GCP Project ID must be set via GOOGLE_CLOUD_PROJECT or PROJECT_ID environment variable")
+		planCacheMutex.Lock()
+		planCacheErrMap[filterKey] = err
+		planCacheMutex.Unlock()
+		return nil, err
+	}
 
-		runnerDir, err := generateAmalgamatedComposition("..")
-		if err != nil {
-			cachedPlanErr = fmt.Errorf("failed to generate master composition module: %w", err)
-			return
-		}
+	region := os.Getenv("GOOGLE_CLOUD_REGION")
+	if region == "" {
+		region = "us-central1"
+	}
 
-		vars := map[string]interface{}{
-			"project_id": projectID,
-			"project":    projectID,
-			"projects":   []string{projectID},
-			"region":     region,
-			"location":   "global",
-		}
+	runnerDir, err := generateAmalgamatedComposition("..", getModuleFilter())
+	if err != nil {
+		err = fmt.Errorf("failed to generate composition module: %w", err)
+		planCacheMutex.Lock()
+		planCacheErrMap[filterKey] = err
+		planCacheMutex.Unlock()
+		return nil, err
+	}
 
-		changes, err := getPlanResourceChanges(t, runnerDir, vars)
-		if err != nil {
-			cachedPlanErr = fmt.Errorf("failed to get plan changes for master composition module: %w", err)
-			return
-		}
-		cachedPlanChanges = changes
-	})
+	vars := map[string]interface{}{
+		"project_id": projectID,
+		"project":    projectID,
+		"projects":   []string{projectID},
+		"region":     region,
+		"location":   "global",
+	}
 
-	return cachedPlanChanges, cachedPlanErr
+	changes, err := getPlanResourceChanges(t, runnerDir, vars)
+	planCacheMutex.Lock()
+	if err != nil {
+		err = fmt.Errorf("failed to get plan changes for composition module: %w", err)
+		planCacheErrMap[filterKey] = err
+		planCacheMutex.Unlock()
+		return nil, err
+	}
+	planCacheMap[filterKey] = changes
+	planCacheErrMap[filterKey] = nil
+	planCacheMutex.Unlock()
+
+	return changes, nil
 }
 
 func isIAMResource(resourceType string) bool {
@@ -500,7 +550,7 @@ func extractEnvToken(value string) string {
 }
 
 func (c *bddContext) runConftestAgainstMasterComposition() error {
-	runnerDir, err := generateAmalgamatedComposition("..")
+	runnerDir, err := generateAmalgamatedComposition("..", getModuleFilter())
 	if err != nil {
 		return fmt.Errorf("failed to generate master composition module: %w", err)
 	}

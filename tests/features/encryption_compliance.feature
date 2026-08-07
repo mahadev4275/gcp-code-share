@@ -1,4 +1,4 @@
-@encryption_compliance
+@encryption_compliance @obs_shared
 Feature: [E2E Suite] Encryption Compliance — Key Management Standard
   As a Security Administrator
   I want to ensure all encryption implementations comply with the corporate Key Management Standard
