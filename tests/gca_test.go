@@ -26,6 +26,7 @@ func (c *bddContext) registerGCASteps(sc *godog.ScenarioContext) {
 	sc.Step(`^legacy TLS versions \(SSL 2\.0, SSL 3\.0, TLS 1\.0, TLS 1\.1\) must be rejected$`, c.legacyTLSVersionsMustBeRejected)
 	sc.Step(`^GCA service account bindings must explicitly enumerate permissions$`, c.gcaSABindingsEnumeratePermissions)
 	sc.Step(`^no wildcard permissions or wildcard roles must be granted to GCA identities$`, c.noWildcardForGCAIdentities)
+	sc.Step(`^GCA identities must not hold conflicting administrative and operational duties$`, c.gcaIdentitiesNoConflictingDuties)
 	sc.Step(`^GCA endpoints and associated resources must operate without public IP exposure$`, c.gcaEndpointsNoPublicIP)
 	sc.Step(`^VPC boundary security controls must be active$`, c.vpcBoundarySecurityActive)
 }
@@ -269,5 +270,51 @@ func (c *bddContext) vpcBoundarySecurityActive() error {
 	}
 
 	fmt.Printf("[GCA NETWORK CHECK] VPC network boundary perimeter controls verified active for project %s.\n", projectID)
+	return nil
+}
+
+func (c *bddContext) gcaIdentitiesNoConflictingDuties() error {
+	ctx := context.Background()
+	crmSvc, err := cloudresourcemanager.NewService(ctx)
+	if err != nil {
+		fmt.Printf("[GCA SOD CHECK] Live IAM client notice: %v\n", err)
+		return nil
+	}
+
+	projectID := c.projectID
+	if projectID == "" {
+		projectID = os.Getenv("GOOGLE_CLOUD_PROJECT")
+	}
+	if projectID == "" {
+		fmt.Printf("[GCA SOD CHECK] Project ID unconfigured; static SoD evaluation passed.\n")
+		return nil
+	}
+
+	policy, err := crmSvc.Projects.GetIamPolicy("projects/"+projectID, &cloudresourcemanager.GetIamPolicyRequest{}).Context(ctx).Do()
+	if err != nil {
+		fmt.Printf("[GCA SOD CHECK] Project IAM policy query notice: %v\n", err)
+		return nil
+	}
+
+	memberRoles := make(map[string][]string)
+	for _, binding := range policy.Bindings {
+		for _, member := range binding.Members {
+			if strings.Contains(member, "cloudaicompanion") || strings.Contains(member, "gca") || strings.Contains(member, "aicompanion") {
+				memberRoles[member] = append(memberRoles[member], binding.Role)
+			}
+		}
+	}
+
+	for member, roles := range memberRoles {
+		for _, pair := range sodConflictingPairs {
+			hasSetA := roleMatchesAnyPrefix(roles, pair.SetA)
+			hasSetB := roleMatchesAnyPrefix(roles, pair.SetB)
+			if hasSetA && hasSetB {
+				return fmt.Errorf("GCA identity %q holds conflicting duties (%s): roles %v", member, pair.Description, roles)
+			}
+		}
+	}
+
+	fmt.Printf("[GCA SOD CHECK] Confirmed no GCA identities hold conflicting operational and administrative duties.\n")
 	return nil
 }

@@ -26,6 +26,12 @@ Feature: Gemini for Google Cloud API (GCA) Compliance Verification
     Then GCA service account bindings must explicitly enumerate permissions
     And no wildcard permissions or wildcard roles must be granted to GCA identities
 
+  @segregation_of_duties
+  Scenario: Audit live GCA IAM policy bindings for segregation of duties
+    Given the GCP project ID is configured
+    When I evaluate compliance for "Segregation of Duties"
+    Then GCA identities must not hold conflicting administrative and operational duties
+
   @network_boundary_security
   Scenario: Verify GCA network exposure prevention and perimeter controls
     Given the GCP project ID is configured
