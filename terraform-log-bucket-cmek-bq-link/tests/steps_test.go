@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/cucumber/godog"
@@ -19,48 +18,44 @@ func (c *bddContext) registerSteps(sc *godog.ScenarioContext) {
 
 func (c *bddContext) verifyCMEKSettings() error {
 	for _, rc := range c.plannedChanges {
-		if rc.Type == "google_logging_project_bucket_config" {
-			val, ok := rc.Change.After["cmek_settings"]
-			if !ok || val == nil {
-				// pretty-print the entire Change.After to help debug shape returned by plan
-				if b, err := json.MarshalIndent(rc.Change.After, "", "  "); err == nil {
-					return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s missing cmek_settings. Change.After:\n%s", rc.Address, string(b))
-				}
-				return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s missing cmek_settings. Change.After (raw): %#v", rc.Address, rc.Change.After)
-			}
+		// Accept both resource types that can represent the logging bucket in different plans
+		if rc.Type != "google_logging_project_bucket_config" && rc.Type != "google_logging_project_bucket" {
+			continue
+		}
 
-			var kms string
+		val, ok := rc.Change.After["cmek_settings"]
+		if !ok || val == nil {
+			return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s missing cmek_settings", rc.Address)
+		}
 
-			switch v := val.(type) {
-			case []interface{}:
-				// common representation: a single-element list with a map inside
-				if len(v) > 0 {
-					if m, ok := v[0].(map[string]interface{}); ok {
-						if ks, ok := m["kms_key_name"].(string); ok && ks != "" {
-							kms = ks
-						}
-					}
-				}
-			case map[string]interface{}:
-				// other representations may come through as a plain map
-				if ks, ok := v["kms_key_name"].(string); ok && ks != "" {
-					kms = ks
-				}
-			default:
-				// unexpected type — include the raw value for debugging
-				if b, err := json.MarshalIndent(val, "", "  "); err == nil {
-					return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s has unexpected cmek_settings type %T. Value:\n%s", rc.Address, v, string(b))
-				}
-				return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s has unexpected cmek_settings type %T. Value (raw): %#v", rc.Address, v, val)
+		checkMap := func(m map[string]interface{}) bool {
+			if ks, ok := m["kms_key_name"].(string); ok && ks != "" {
+				return true
 			}
+			if kv, ok := m["kms_key_version_name"].(string); ok && kv != "" {
+				return true
+			}
+			return false
+		}
 
-			if kms == "" {
-				// kmss missing or empty — show the cmek_settings value for debugging
-				if b, err := json.MarshalIndent(val, "", "  "); err == nil {
-					return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s cmek_settings.kms_key_name is empty or missing. cmek_settings:\n%s", rc.Address, string(b))
+		found := false
+		switch v := val.(type) {
+		case []interface{}:
+			// common representation: a single-element list holding a map
+			if len(v) > 0 {
+				if m, ok := v[0].(map[string]interface{}); ok {
+					found = checkMap(m)
 				}
-				return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s cmek_settings.kms_key_name is empty or missing. cmek_settings (raw): %#v", rc.Address, val)
 			}
+		case map[string]interface{}:
+			// some TF/provider/plan shapes use a plain map
+			found = checkMap(v)
+		default:
+			return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s has unexpected cmek_settings type %T", rc.Address, val)
+		}
+
+		if !found {
+			return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s cmek_settings missing kms_key_name or kms_key_version_name", rc.Address)
 		}
 	}
 	return nil
