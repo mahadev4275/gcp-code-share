@@ -31,3 +31,13 @@ variable "linked_dataset_id" {
     error_message = "linked_dataset_id must contain only letters, numbers, and underscores. Do not use hyphens."
   }
 }
+
+variable "kms_key_ring" {
+  type    = string
+  default = "logging-keyring"
+}
+
+variable "kms_crypto_key" {
+  type    = string
+  default = "logging-key"
+}
