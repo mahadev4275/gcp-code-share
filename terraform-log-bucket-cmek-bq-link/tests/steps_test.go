@@ -18,11 +18,72 @@ func (c *bddContext) registerSteps(sc *godog.ScenarioContext) {
 
 func (c *bddContext) verifyCMEKSettings() error {
 	for _, rc := range c.plannedChanges {
-		if rc.Type == "google_logging_project_bucket_config" {
-			cmek, ok := rc.Change.After["cmek_settings"].([]interface{})
-			if !ok || len(cmek) == 0 {
-				return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s missing cmek_settings", rc.Address)
+		// Accept both resource types that can represent the logging bucket in different plans
+		if rc.Type != "google_logging_project_bucket_config" && rc.Type != "google_logging_project_bucket" {
+			continue
+		}
+
+		val, ok := rc.Change.After["cmek_settings"]
+		if !ok || val == nil {
+			return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s missing cmek_settings", rc.Address)
+		}
+
+		checkMap := func(m map[string]interface{}) bool {
+			if ks, ok := m["kms_key_name"].(string); ok && ks != "" {
+				return true
 			}
+			if kv, ok := m["kms_key_version_name"].(string); ok && kv != "" {
+				return true
+			}
+			return false
+		}
+
+		// Check if kms_key_name is marked as "known after apply" in after_unknown
+		checkUnknownMap := func(m map[string]interface{}) bool {
+			if v, ok := m["kms_key_name"].(bool); ok && v {
+				return true
+			}
+			if v, ok := m["kms_key_version_name"].(bool); ok && v {
+				return true
+			}
+			return false
+		}
+
+		found := false
+		switch v := val.(type) {
+		case []interface{}:
+			// common representation: a single-element list holding a map
+			if len(v) > 0 {
+				if m, ok := v[0].(map[string]interface{}); ok {
+					found = checkMap(m)
+				}
+			}
+			// If not found in after, check after_unknown
+			if !found {
+				if unknownVal, ok := rc.Change.AfterUnknown["cmek_settings"]; ok {
+					if uArr, ok := unknownVal.([]interface{}); ok && len(uArr) > 0 {
+						if um, ok := uArr[0].(map[string]interface{}); ok {
+							found = checkUnknownMap(um)
+						}
+					}
+				}
+			}
+		case map[string]interface{}:
+			// some TF/provider/plan shapes use a plain map
+			found = checkMap(v)
+			if !found {
+				if unknownVal, ok := rc.Change.AfterUnknown["cmek_settings"]; ok {
+					if um, ok := unknownVal.(map[string]interface{}); ok {
+						found = checkUnknownMap(um)
+					}
+				}
+			}
+		default:
+			return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s has unexpected cmek_settings type %T", rc.Address, val)
+		}
+
+		if !found {
+			return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s cmek_settings missing kms_key_name or kms_key_version_name", rc.Address)
 		}
 	}
 	return nil

@@ -18,9 +18,10 @@ type PlanResourceChange struct {
 	Type    string `json:"type"`
 	Name    string `json:"name"`
 	Change  struct {
-		Actions []string               `json:"actions"`
-		Before  map[string]interface{} `json:"before"`
-		After   map[string]interface{} `json:"after"`
+		Actions      []string               `json:"actions"`
+		Before       map[string]interface{} `json:"before"`
+		After        map[string]interface{} `json:"after"`
+		AfterUnknown map[string]interface{} `json:"after_unknown"`
 	} `json:"change"`
 }
 
@@ -114,7 +115,8 @@ func runConftestAgainstModule(t *testing.T) error {
 
 	output, err := shell.RunCommandContextAndGetOutputE(t, ctx, &conftestCmd)
 	if err != nil {
-		return fmt.Errorf("OPA Conftest policy violation for module:\n%s", output)
+		// Include both the command output and the Go error for full diagnostic visibility
+		return fmt.Errorf("OPA Conftest policy violation for module:\n%s\n\nUnderlying error: %v", output, err)
 	}
 	return nil
 }

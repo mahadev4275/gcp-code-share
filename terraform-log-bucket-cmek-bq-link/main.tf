@@ -23,6 +23,8 @@ module "cmek_log_bucket" {
   location       = var.location
   bucket_id      = var.log_bucket_id
   retention_days = var.retention_days
+  kms_key_ring   = var.kms_key_ring
+  kms_crypto_key = var.kms_crypto_key
 }
 
 module "linked_bq_dataset" {
