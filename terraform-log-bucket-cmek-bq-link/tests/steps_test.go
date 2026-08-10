@@ -38,6 +38,17 @@ func (c *bddContext) verifyCMEKSettings() error {
 			return false
 		}
 
+		// Check if kms_key_name is marked as "known after apply" in after_unknown
+		checkUnknownMap := func(m map[string]interface{}) bool {
+			if v, ok := m["kms_key_name"].(bool); ok && v {
+				return true
+			}
+			if v, ok := m["kms_key_version_name"].(bool); ok && v {
+				return true
+			}
+			return false
+		}
+
 		found := false
 		switch v := val.(type) {
 		case []interface{}:
@@ -47,9 +58,26 @@ func (c *bddContext) verifyCMEKSettings() error {
 					found = checkMap(m)
 				}
 			}
+			// If not found in after, check after_unknown
+			if !found {
+				if unknownVal, ok := rc.Change.AfterUnknown["cmek_settings"]; ok {
+					if uArr, ok := unknownVal.([]interface{}); ok && len(uArr) > 0 {
+						if um, ok := uArr[0].(map[string]interface{}); ok {
+							found = checkUnknownMap(um)
+						}
+					}
+				}
+			}
 		case map[string]interface{}:
 			// some TF/provider/plan shapes use a plain map
 			found = checkMap(v)
+			if !found {
+				if unknownVal, ok := rc.Change.AfterUnknown["cmek_settings"]; ok {
+					if um, ok := unknownVal.(map[string]interface{}); ok {
+						found = checkUnknownMap(um)
+					}
+				}
+			}
 		default:
 			return fmt.Errorf("security violation (CR.SECURITY.009): logging bucket %s has unexpected cmek_settings type %T", rc.Address, val)
 		}
