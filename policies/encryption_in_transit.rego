@@ -1,4 +1,4 @@
-package main
+package encryption 
 
 import future.keywords.in
 import future.keywords.contains
