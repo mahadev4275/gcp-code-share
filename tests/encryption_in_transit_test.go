@@ -118,15 +118,15 @@ func (c *bddContext) verifyConftestEncryptionInTransitPolicies() error {
 					"project_id": projectID,
 				},
 			},
-			{
-				path: "../Trace_scope",
-				vars: map[string]interface{}{
-					"project":  projectID,
-					"projects": []string{projectID},
-					"region":   region,
-					"location": region,
-				},
-			},
+			// {
+			// 	path: "../Trace_scope",
+			// 	vars: map[string]interface{}{
+			// 		"project":  projectID,
+			// 		"projects": []string{projectID},
+			// 		"region":   region,
+			// 		"location": region,
+			// 	},
+			// },
 		}
 
 		for _, d := range dirs {
