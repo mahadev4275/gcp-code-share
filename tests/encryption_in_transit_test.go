@@ -311,7 +311,7 @@ func runConftestOnDirWithVars(t *testing.T, dir string, vars map[string]interfac
 
 	conftestCmd := shell.Command{
 		Command:    "conftest",
-		Args:       []string{"test", planJSONFileName, "--policy", absPolicyDir},
+		Args:       []string{"test", planJSONFileName, "--policy", absPolicyDir, "--namespace", "encryption"},
 		WorkingDir: dir,
 	}
 	if isTFQuiet() {
