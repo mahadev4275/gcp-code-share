@@ -118,18 +118,39 @@ func (c *bddContext) verifyConftestEncryptionInTransitPolicies() error {
 					"project_id": projectID,
 				},
 			},
-			// {
-			// 	path: "../Trace_scope",
-			// 	vars: map[string]interface{}{
-			// 		"project":  projectID,
-			// 		"projects": []string{projectID},
-			// 		"region":   region,
-			// 		"location": region,
-			// 	},
-			// },
+			{
+				path: "../Trace_scope",
+				vars: map[string]interface{}{
+					"project": projectID,
+					// "projects": []string{projectID},
+					// "region":   region,
+					"location":           "location_test",
+					"monitored_projects": []string{"project_id_test"},
+				},
+			},
 		}
 
-		for _, d := range dirs {
+		allowedModules := getModuleFilter()
+		var filteredDirs []struct {
+			path string
+			vars map[string]interface{}
+		}
+
+		if len(allowedModules) > 0 {
+			allowedMap := make(map[string]bool)
+			for _, m := range allowedModules {
+				allowedMap[m] = true
+			}
+			for _, d := range dirs {
+				if allowedMap[filepath.Base(d.path)] {
+					filteredDirs = append(filteredDirs, d)
+				}
+			}
+		} else {
+			filteredDirs = dirs
+		}
+
+		for _, d := range filteredDirs {
 			if err := runConftestOnDirWithVars(c.t, d.path, d.vars); err != nil {
 				conftestCacheErr = err
 				return
