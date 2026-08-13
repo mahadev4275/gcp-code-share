@@ -479,7 +479,14 @@ func getRepositoryPlanChanges(t *testing.T) ([]PlanResourceChange, error) {
 		region = "us-central1"
 	}
 
-	runnerDir, err := generateAmalgamatedComposition("..", getModuleFilter())
+	modulesToRun := getModuleFilter()
+	if len(modulesToRun) > 0 {
+		t.Logf(">>> [SUITE RUNNER] Building composition module with targeted modules: %s", strings.Join(modulesToRun, ", "))
+	} else {
+		t.Logf(">>> [SUITE RUNNER] Building composition module with ALL discovered modules")
+	}
+
+	runnerDir, err := generateAmalgamatedComposition("..", modulesToRun)
 	if err != nil {
 		err = fmt.Errorf("failed to generate composition module: %w", err)
 		planCacheMutex.Lock()

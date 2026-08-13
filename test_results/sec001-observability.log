@@ -1,0 +1,70 @@
+=== RUN   TestE2ESuiteFeatures
+[1;37mFeature:[0m [E2E Suite] Encryption Compliance — Key Management Standard
+  As a Security Administrator
+  I want to ensure all encryption implementations comply with the corporate Key Management Standard
+  So that data at rest and data in transit meet approved cryptographic, key lifecycle, and compliance requirements
+=== RUN   TestE2ESuiteFeatures/All_symmetric_keys_must_use_approved_cryptographic_algorithms
+=== NAME  TestE2ESuiteFeatures
+    plan_helper_test.go:484: >>> [SUITE RUNNER] Building composition module with targeted modules: terraform-org-policy, terraform-cmek-policy, Trace_scope
+TestE2ESuiteFeatures 2026-08-13T16:16:35+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-13T16:16:43+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1 -var location=global]
+TestE2ESuiteFeatures 2026-08-13T16:16:48+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+
+  [1;37mScenario:[0m All symmetric keys must use approved cryptographic algorithms [1;30m# features/encryption_compliance.feature:7[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mAnd[0m [32mthe KMS key ring and crypto keys are provisioned[0m                  [1;30m# encryption_compliance_test.go:148 -> *bddContext[0m
+    [32mWhen[0m [32mthe cryptographic algorithm configuration is inspected[0m           [1;30m# encryption_compliance_test.go:149 -> *bddContext[0m
+    [32mThen[0m [32mall symmetric keys must use AES-256-GCM[0m                          [1;30m# encryption_compliance_test.go:150 -> *bddContext[0m
+    [32mAnd[0m [32mno non-approved algorithms must be present[0m                        [1;30m# encryption_compliance_test.go:151 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/All_symmetric_keys_must_meet_minimum_bit_strength
+
+  [1;37mScenario:[0m All symmetric keys must meet minimum bit strength        [1;30m# features/encryption_compliance.feature:14[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                           [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mAnd[0m [32mthe KMS key ring and crypto keys are provisioned[0m             [1;30m# encryption_compliance_test.go:148 -> *bddContext[0m
+    [32mWhen[0m [32mthe key bit strength is inspected[0m                           [1;30m# encryption_compliance_test.go:154 -> *bddContext[0m
+    [32mThen[0m [32mall symmetric keys must have a minimum strength of 256 bits[0m [1;30m# encryption_compliance_test.go:155 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Production_data-at-rest_keys_must_use_CloudHSM_for_FIPS_140-2_Level_3
+
+  [1;37mScenario:[0m Production data-at-rest keys must use CloudHSM for FIPS 140-2 Level 3 [1;30m# features/encryption_compliance.feature:20[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                        [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mAnd[0m [32mthe KMS key ring and crypto keys are provisioned[0m                          [1;30m# encryption_compliance_test.go:148 -> *bddContext[0m
+    [32mWhen[0m [32mthe key protection level is inspected[0m                                    [1;30m# encryption_compliance_test.go:158 -> *bddContext[0m
+    [32mThen[0m [32mall production data-at-rest keys must use CloudHSM protection level[0m      [1;30m# encryption_compliance_test.go:159 -> *bddContext[0m
+    [32mAnd[0m [32mthe CloudHSM module must meet FIPS 140-2 Level 3 certification[0m            [1;30m# encryption_compliance_test.go:160 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Key_rotation_must_be_enabled_and_within_policy_limits
+
+  [1;37mScenario:[0m Key rotation must be enabled and within policy limits [1;30m# features/encryption_compliance.feature:27[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                        [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mAnd[0m [32mthe KMS key ring and crypto keys are provisioned[0m          [1;30m# encryption_compliance_test.go:148 -> *bddContext[0m
+    [32mWhen[0m [32mthe key rotation configuration is inspected[0m              [1;30m# encryption_compliance_test.go:163 -> *bddContext[0m
+    [32mThen[0m [32mautomatic key rotation must be enabled[0m                   [1;30m# encryption_compliance_test.go:164 -> *bddContext[0m
+    [32mAnd[0m [32mthe rotation period must not exceed 365 days[0m              [1;30m# encryption_compliance_test.go:165 -> *bddContext[0m
+    [32mAnd[0m [32mthe next rotation time must be scheduled[0m                  [1;30m# encryption_compliance_test.go:166 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/KMS_API_endpoints_must_enforce_TLS_1.2_or_higher
+
+  [1;37mScenario:[0m KMS API endpoints must enforce TLS 1.2 or higher                                [1;30m# features/encryption_compliance.feature:35[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                                  [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mthe encryption-in-transit posture is validated against the key management standard[0m [1;30m# encryption_compliance_test.go:169 -> *bddContext[0m
+    [32mThen[0m [32mall KMS API endpoints must enforce TLS 1.2 or higher[0m                               [1;30m# encryption_compliance_test.go:170 -> *bddContext[0m
+    [32mAnd[0m [32mlegacy TLS versions must be rejected by KMS endpoints[0m                               [1;30m# encryption_compliance_test.go:171 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Key_lifecycle_must_be_managed_through_Infrastructure_as_Code
+
+  [1;37mScenario:[0m Key lifecycle must be managed through Infrastructure as Code [1;30m# features/encryption_compliance.feature:41[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                               [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mAnd[0m [32mkey resources are provisioned through Infrastructure as Code[0m     [1;30m# encryption_compliance_test.go:174 -> *bddContext[0m
+    [32mThen[0m [32mKMS key rings must be present in the Terraform state[0m            [1;30m# encryption_compliance_test.go:175 -> *bddContext[0m
+    [32mAnd[0m [32mKMS crypto keys must be present in the Terraform state[0m           [1;30m# encryption_compliance_test.go:176 -> *bddContext[0m
+    [32mAnd[0m [32morganization policies for CMEK must be enforced via IaC[0m          [1;30m# encryption_compliance_test.go:177 -> *bddContext[0m
+
+6 scenarios ([32m6 passed[0m)
+29 steps ([32m29 passed[0m)
+13.6985482s
+--- PASS: TestE2ESuiteFeatures (13.70s)
+    --- PASS: TestE2ESuiteFeatures/All_symmetric_keys_must_use_approved_cryptographic_algorithms (13.68s)
+    --- PASS: TestE2ESuiteFeatures/All_symmetric_keys_must_meet_minimum_bit_strength (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Production_data-at-rest_keys_must_use_CloudHSM_for_FIPS_140-2_Level_3 (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Key_rotation_must_be_enabled_and_within_policy_limits (0.00s)
+    --- PASS: TestE2ESuiteFeatures/KMS_API_endpoints_must_enforce_TLS_1.2_or_higher (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Key_lifecycle_must_be_managed_through_Infrastructure_as_Code (0.00s)
+PASS
+ok  	github.com/mahadev4275/gcp-code-share/tests	16.678s

@@ -133,11 +133,13 @@ func (c *bddContext) getCMEKOpts() *terraform.Options {
 func (c *bddContext) registerEncryptionComplianceSteps(sc *godog.ScenarioContext) {
 	sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
 		if hasTag(scenario, "@encryption_compliance") {
-			opts, err := setupCMEKLogBucketModule(c.t)
-			if err != nil {
-				return ctx, err
+			if c.isCMEKModuleTargeted() {
+				opts, err := setupCMEKLogBucketModule(c.t)
+				if err != nil {
+					return ctx, err
+				}
+				c.tfOpts = opts
 			}
-			c.tfOpts = opts
 		}
 		return ctx, nil
 	})
@@ -309,7 +311,23 @@ func (c *bddContext) listProjectCryptoKeys() ([]*kmspb.CryptoKey, error) {
 
 // --- Algorithm compliance ---
 
+func (c *bddContext) isCMEKModuleTargeted() bool {
+	allowedModules := getModuleFilter()
+	if len(allowedModules) == 0 {
+		return true
+	}
+	for _, m := range allowedModules {
+		if m == "terraform-log-bucket-cmek" {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *bddContext) verifyApprovedAlgorithms() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	versions, err := c.listProjectCryptoKeyVersions()
 	if err != nil {
 		return err
@@ -343,6 +361,9 @@ func (c *bddContext) verifyNoUnapprovedAlgorithms() error {
 // --- Minimum bit strength ---
 
 func (c *bddContext) verifyMinimumBitStrength() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	versions, err := c.listProjectCryptoKeyVersions()
 	if err != nil {
 		return err
@@ -376,6 +397,9 @@ func (c *bddContext) verifyMinimumBitStrength() error {
 // --- FIPS 140-2 Level 3 (CloudHSM) ---
 
 func (c *bddContext) verifyCloudHSMProtectionLevel() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	versions, err := c.listProjectCryptoKeyVersions()
 	if err != nil {
 		return err
@@ -407,6 +431,9 @@ func (c *bddContext) verifyFIPS1402Level3() error {
 // --- Key rotation ---
 
 func (c *bddContext) verifyAutomaticRotationEnabled() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	keys, err := c.listProjectCryptoKeys()
 	if err != nil {
 		return err
@@ -432,6 +459,9 @@ func (c *bddContext) verifyAutomaticRotationEnabled() error {
 }
 
 func (c *bddContext) verifyRotationPeriodCompliance() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	keys, err := c.listProjectCryptoKeys()
 	if err != nil {
 		return err
@@ -464,6 +494,9 @@ func (c *bddContext) verifyRotationPeriodCompliance() error {
 }
 
 func (c *bddContext) verifyNextRotationScheduled() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	keys, err := c.listProjectCryptoKeys()
 	if err != nil {
 		return err
@@ -491,6 +524,9 @@ func (c *bddContext) verifyNextRotationScheduled() error {
 // --- TLS 1.2+ enforcement on KMS endpoints ---
 
 func (c *bddContext) verifyKMSEndpointTLS() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	conn, err := tls.DialWithDialer(
 		&net.Dialer{Timeout: 10 * time.Second},
 		"tcp", tlsValidationHost+":443",
@@ -508,6 +544,9 @@ func (c *bddContext) verifyKMSEndpointTLS() error {
 }
 
 func (c *bddContext) verifyKMSEndpointLegacyRejected() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	for _, ver := range []uint16{tls.VersionTLS10, tls.VersionTLS11} {
 		conn, err := tls.DialWithDialer(
 			&net.Dialer{Timeout: 5 * time.Second},
@@ -545,6 +584,9 @@ func (c *bddContext) verifyKMSEndpointLegacyRejected() error {
 // --- Key lifecycle management via IaC ---
 
 func (c *bddContext) verifyKeyRingInTerraformState() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	opts := c.getCMEKOpts()
 	if opts == nil {
 		return fmt.Errorf("terraform options not configured — cannot inspect state")
@@ -560,6 +602,9 @@ func (c *bddContext) verifyKeyRingInTerraformState() error {
 }
 
 func (c *bddContext) verifyCryptoKeyInTerraformState() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	opts := c.getCMEKOpts()
 	if opts == nil {
 		return fmt.Errorf("terraform options not configured — cannot inspect state")
@@ -575,6 +620,9 @@ func (c *bddContext) verifyCryptoKeyInTerraformState() error {
 }
 
 func (c *bddContext) verifyOrgPolicyCMEKInTerraformState() error {
+	if !c.isCMEKModuleTargeted() {
+		return nil
+	}
 	opts := c.getCMEKOpts()
 	if opts == nil {
 		return fmt.Errorf("terraform options not configured — cannot inspect state")
