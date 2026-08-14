@@ -1,0 +1,104 @@
+=== RUN   TestE2ESuiteFeatures
+[1;37mFeature:[0m [E2E Suite] Encryption in Transit & Protocol Compliance
+  As a GCP Security Administrator
+  I want to ensure all data in transit across external, internal, and database communication channels is encrypted
+  So that legacy unencrypted protocols are rejected, insecure URL schemes are prohibited, and compliance with security standards is maintained
+=== RUN   TestE2ESuiteFeatures/Service_enforces_TLS_1.2_or_higher
+=== NAME  TestE2ESuiteFeatures
+    plan_helper_test.go:504: >>> [SUITE RUNNER] Building composition module with targeted modules: bq-cross-project-access, terraform-bq-scheduled-query, terraform-log-router-bq, terraform-log-bucket-cmek-bq-link, sql-alert-module
+TestE2ESuiteFeatures 2026-08-14T17:49:26+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T17:49:33+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1 -var location=global -var project_id=gcp-sbx-lab-core-80d4]
+TestE2ESuiteFeatures 2026-08-14T17:49:41+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+
+  [1;37mScenario:[0m Service enforces TLS 1.2 or higher                                 [1;30m# features/encryption_in_transit.feature:7[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                     [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mthe encryption-in-transit configuration is inspected[0m                  [1;30m# encryption_in_transit_test.go:32 -> *bddContext[0m
+TestE2ESuiteFeatures 2026-08-14T17:49:43+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T17:49:43+05:30 retry.go:159: terraform [plan -out tfplan-bq-cross-project-access -var project_id=gcp-sbx-lab-core-80d4]
+TestE2ESuiteFeatures 2026-08-14T17:49:45+05:30 retry.go:159: terraform [show -json tfplan-bq-cross-project-access]
+TestE2ESuiteFeatures 2026-08-14T17:49:45+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T17:49:46+05:30 retry.go:159: terraform [plan -out tfplan-terraform-bq-scheduled-query -var project_id=gcp-sbx-lab-core-80d4]
+TestE2ESuiteFeatures 2026-08-14T17:49:47+05:30 retry.go:159: terraform [show -json tfplan-terraform-bq-scheduled-query]
+TestE2ESuiteFeatures 2026-08-14T17:49:48+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T17:49:48+05:30 retry.go:159: terraform [plan -out tfplan-terraform-log-router-bq -var project_id=gcp-sbx-lab-core-80d4 -var dataset_id=test_dataset -var sink_name=test_sink]
+TestE2ESuiteFeatures 2026-08-14T17:49:50+05:30 retry.go:159: terraform [show -json tfplan-terraform-log-router-bq]
+    [32mThen[0m [32mHTTPS or TLS must be in use[0m                                           [1;30m# encryption_in_transit_test.go:33 -> *bddContext[0m
+    [32mAnd[0m [32mTLS version must be 1.2 or higher[0m                                      [1;30m# encryption_in_transit_test.go:34 -> *bddContext[0m
+    [32mAnd[0m [32mlegacy protocols (SSL 2.0, SSL 3.0, TLS 1.0, TLS 1.1) must be disabled[0m [1;30m# encryption_in_transit_test.go:35 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Internal_communication_uses_TLS_or_mTLS
+
+  [1;37mScenario:[0m Internal communication uses TLS or mTLS      [1;30m# features/encryption_in_transit.feature:14[0m
+    [32mGiven[0m [32ma service transmits data to another service[0m    [1;30m# encryption_in_transit_test.go:37 -> *bddContext[0m
+    [32mWhen[0m [32mthe communication channel is validated[0m          [1;30m# encryption_in_transit_test.go:38 -> *bddContext[0m
+    [32mThen[0m [32mdata transmission must use TLS or mTLS[0m          [1;30m# encryption_in_transit_test.go:39 -> *bddContext[0m
+    [32mAnd[0m [32munencrypted traffic must be blocked[0m              [1;30m# encryption_in_transit_test.go:40 -> *bddContext[0m
+    [32mAnd[0m [32mencryption events must be captured in audit logs[0m [1;30m# encryption_in_transit_test.go:41 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Load_Balancer_enforces_modern_TLS_configuration
+
+  [1;37mScenario:[0m Load Balancer enforces modern TLS configuration         [1;30m# features/encryption_in_transit.feature:21[0m
+    [32mGiven[0m [32ma Load Balancer or API Gateway exists[0m                     [1;30m# encryption_in_transit_test.go:43 -> *bddContext[0m
+    [32mWhen[0m [32mthe SSL/TLS policy configuration is inspected[0m              [1;30m# encryption_in_transit_test.go:44 -> *bddContext[0m
+    [32mThen[0m [32mthe SSL policy profile must be set to MODERN or RESTRICTED[0m [1;30m# encryption_in_transit_test.go:45 -> *bddContext[0m
+    [32mAnd[0m [32mthe minimum TLS version must be TLS 1.2[0m                     [1;30m# encryption_in_transit_test.go:46 -> *bddContext[0m
+    [32mAnd[0m [32mlegacy cipher suites must be explicitly disabled[0m            [1;30m# encryption_in_transit_test.go:47 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Database_requires_TLS_for_all_connections
+
+  [1;37mScenario:[0m Database requires TLS for all connections               [1;30m# features/encryption_in_transit.feature:28[0m
+    [32mGiven[0m [32ma managed database instance exists[0m                        [1;30m# encryption_in_transit_test.go:49 -> *bddContext[0m
+    [32mWhen[0m [32mthe database SSL/TLS configuration is inspected[0m            [1;30m# encryption_in_transit_test.go:50 -> *bddContext[0m
+    [32mThen[0m [32mSSL/TLS must be required for all client connections[0m        [1;30m# encryption_in_transit_test.go:51 -> *bddContext[0m
+    [32mAnd[0m [32mconnections without valid TLS certificates must be rejected[0m [1;30m# encryption_in_transit_test.go:52 -> *bddContext[0m
+    [32mAnd[0m [32mthe minimum TLS version must be 1.2[0m                         [1;30m# encryption_in_transit_test.go:53 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/No_resource_URLs_use_insecure_communication_schemes
+
+  [1;37mScenario:[0m No resource URLs use insecure communication schemes                            [1;30m# features/encryption_in_transit.feature:35[0m
+    [32mGiven[0m [32mTerraform plan resource configurations are evaluated[0m                             [1;30m# encryption_in_transit_test.go:55 -> *bddContext[0m
+    [32mWhen[0m [32mresource attributes and URLs are inspected[0m                                        [1;30m# encryption_in_transit_test.go:56 -> *bddContext[0m
+    [32mThen[0m [32minsecure URL schemes (http, ws, ftp, telnet) must not appear in any resource URLs[0m [1;30m# encryption_in_transit_test.go:57 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Observability_API_rejects_insecure_http_scheme_and_mandates_TLS_1.2_or_higher
+
+  [1;37mScenario:[0m Observability API rejects insecure http scheme and mandates TLS 1.2 or higher [1;30m# features/encryption_in_transit.feature:40[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                                [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32man API request is sent to the Observability API using an unsafe http scheme[0m      [1;30m# encryption_in_transit_test.go:60 -> *bddContext[0m
+    [32mThen[0m [32mthe request must be rejected by the server[0m                                       [1;30m# encryption_in_transit_test.go:61 -> *bddContext[0m
+    [32mAnd[0m [32mlive Observability API endpoints must mandate TLS version 1.2 or higher[0m           [1;30m# encryption_in_transit_test.go:62 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/BigQuery_API_rejects_insecure_http_scheme_and_mandates_TLS_1.2_or_higher
+
+  [1;37mScenario:[0m BigQuery API rejects insecure http scheme and mandates TLS 1.2 or higher [1;30m# features/encryption_in_transit.feature:46[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                           [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32man API request is sent to the BigQuery API using an unsafe http scheme[0m      [1;30m# encryption_in_transit_test.go:65 -> *bddContext[0m
+    [32mThen[0m [32mthe BigQuery request must be rejected by the server[0m                         [1;30m# encryption_in_transit_test.go:66 -> *bddContext[0m
+    [32mAnd[0m [32mlive BigQuery API endpoints must mandate TLS version 1.2 or higher[0m           [1;30m# encryption_in_transit_test.go:67 -> *bddContext[0m
+
+[1;37mFeature:[0m Gemini for Google Cloud API (GCA) Compliance Verification
+  As a GCP Security Administrator
+  I want to verify that Gemini for Google Cloud API (cloudaicompanion.googleapis.com) meets all live API architecture and security standards
+  So that high criticality and sensitive workloads operate in a fully compliant environment
+=== RUN   TestE2ESuiteFeatures/Verify_GCA_API_transport_security_and_HTTPS_TLS_1.2+_enforcement
+
+  [1;37mScenario:[0m Verify GCA API transport security and HTTPS TLS 1.2+ enforcement       [1;30m# features/gca.feature:16[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                         [1;30m# bdd_test.go:80 -> *bddContext[0m
+
+========================================================================
+[EVALUATION LOG] Compliance Standard Under Verification: Data in Transit Encryption Enforcement
+========================================================================
+    [32mWhen[0m [32mI evaluate compliance for "Data in Transit Encryption Enforcement"[0m        [1;30m# gca_test.go:21 -> *bddContext[0m
+[GCA TRANSPORT CHECK] Endpoint 'cloudaicompanion.googleapis.com' uses secure scheme: https
+    [32mThen[0m [32mthe GCA API endpoint "cloudaicompanion.googleapis.com" must enforce HTTPS[0m [1;30m# gca_test.go:25 -> *bddContext[0m
+[GCA TRANSPORT CHECK] Target GCA endpoint 'cloudaicompanion.googleapis.com' transport security verified via Google API Gateway.
+    [32mAnd[0m [32mlegacy TLS versions (SSL 2.0, SSL 3.0, TLS 1.0, TLS 1.1) must be rejected[0m  [1;30m# gca_test.go:26 -> *bddContext[0m
+
+8 scenarios ([32m8 passed[0m)
+35 steps ([32m35 passed[0m)
+25.673144s
+--- PASS: TestE2ESuiteFeatures (25.68s)
+    --- PASS: TestE2ESuiteFeatures/Service_enforces_TLS_1.2_or_higher (24.51s)
+    --- PASS: TestE2ESuiteFeatures/Internal_communication_uses_TLS_or_mTLS (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Load_Balancer_enforces_modern_TLS_configuration (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Database_requires_TLS_for_all_connections (0.00s)
+    --- PASS: TestE2ESuiteFeatures/No_resource_URLs_use_insecure_communication_schemes (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Observability_API_rejects_insecure_http_scheme_and_mandates_TLS_1.2_or_higher (0.59s)
+    --- PASS: TestE2ESuiteFeatures/BigQuery_API_rejects_insecure_http_scheme_and_mandates_TLS_1.2_or_higher (0.21s)
+    --- PASS: TestE2ESuiteFeatures/Verify_GCA_API_transport_security_and_HTTPS_TLS_1.2+_enforcement (0.35s)
+PASS
+ok  	github.com/mahadev4275/gcp-code-share/tests	28.403s

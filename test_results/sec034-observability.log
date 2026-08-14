@@ -1,46 +1,47 @@
 === RUN   TestE2ESuiteFeatures
-[1;37mFeature:[0m [E2E Suite] Custom Roles for Control Plane
+[1;37mFeature:[0m [E2E Suite] IAM Permission Restrictions Check
   As a GCP security administrator
-  I want to ensure service accounts and key management utilize custom roles rather than vendor-managed control plane roles
-  So that the principle of least privilege is enforced and broad access is restricted
-=== RUN   TestE2ESuiteFeatures/Verify_no_vendor-managed_roles_are_used_for_control_plane
+  I want to ensure IAM permission restrictions are enforced in Terraform configurations
+  So that privilege escalation, public access, and cross-environment access are prevented
+=== RUN   TestE2ESuiteFeatures/Verify_no_wildcard_permissions_are_allowed_in_IAM_policies
 === NAME  TestE2ESuiteFeatures
-    plan_helper_test.go:484: >>> [SUITE RUNNER] Building composition module with targeted modules: terraform-org-policy, terraform-cmek-policy, Trace_scope
-TestE2ESuiteFeatures 2026-08-13T18:35:13+05:30 retry.go:159: terraform [init -upgrade=false]
-TestE2ESuiteFeatures 2026-08-13T18:35:22+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var region=us-central1 -var location=global -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"]]
-TestE2ESuiteFeatures 2026-08-13T18:35:29+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+    plan_helper_test.go:504: >>> [SUITE RUNNER] Building composition module with targeted modules: terraform-org-policy, terraform-cmek-policy, Trace_scope
+TestE2ESuiteFeatures 2026-08-14T18:20:17+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T18:20:23+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1 -var location=global]
+TestE2ESuiteFeatures 2026-08-14T18:20:29+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
 
-  [1;37mScenario:[0m Verify no vendor-managed roles are used for control plane                        [1;30m# features/custom_roles_for_control_plane.feature:7[0m
-    [32mGiven[0m [32mthe GCP project ID is configured[0m                                                   [1;30m# bdd_test.go:80 -> *bddContext[0m
-    [32mWhen[0m [32mI run terraform plan on all modules[0m                                                 [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
-    [32mThen[0m [32mno vendor-managed control-plane roles should be assigned to any resources[0m           [1;30m# custom_roles_for_control_plane_test.go:57 -> *bddContext[0m
-    [32mAnd[0m [32mservice accounts must use custom roles instead of vendor-managed control-plane roles[0m [1;30m# custom_roles_for_control_plane_test.go:58 -> *bddContext[0m
-=== RUN   TestE2ESuiteFeatures/Verify_key_management_role_restrictions
+  [1;37mScenario:[0m Verify no wildcard permissions are allowed in IAM policies                     [1;30m# features/iam_permission_restrictions.feature:7[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                                 [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mI run terraform plan on all modules[0m                                               [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
+    [32mThen[0m [32mno wildcard principals, wildcard roles, or wildcard permissions should be allowed[0m [1;30m# iam-permission-restrictions_test.go:12 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Verify_conditional_scoping_at_trust_boundary
 
-  [1;37mScenario:[0m Verify key management role restrictions                      [1;30m# features/custom_roles_for_control_plane.feature:13[0m
-    [32mGiven[0m [32mthe GCP project ID is configured[0m                               [1;30m# bdd_test.go:80 -> *bddContext[0m
-    [32mWhen[0m [32mI run terraform plan on all modules[0m                             [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
-    [32mThen[0m [32mVault service accounts must use custom roles for key management[0m [1;30m# custom_roles_for_control_plane_test.go:59 -> *bddContext[0m
-=== RUN   TestE2ESuiteFeatures/Verify_deployment_role_restrictions
+  [1;37mScenario:[0m Verify conditional scoping at trust boundary  [1;30m# features/iam_permission_restrictions.feature:12[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mI run terraform plan on all modules[0m              [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
+    [32mThen[0m [32mall IAM resources must include a condition block[0m [1;30m# iam-permission-restrictions_test.go:13 -> *bddContext[0m
+    [32mAnd[0m [32mno organization-level IAM bindings are allowed[0m    [1;30m# iam-permission-restrictions_test.go:14 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Verify_service_account_scope_restrictions
 
-  [1;37mScenario:[0m Verify deployment role restrictions                               [1;30m# features/custom_roles_for_control_plane.feature:18[0m
-    [32mGiven[0m [32mthe GCP project ID is configured[0m                                    [1;30m# bdd_test.go:80 -> *bddContext[0m
-    [32mWhen[0m [32mI run terraform plan on all modules[0m                                  [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
-    [32mThen[0m [32mCI/CD pipeline service accounts must use custom roles for deployment[0m [1;30m# custom_roles_for_control_plane_test.go:60 -> *bddContext[0m
-=== RUN   TestE2ESuiteFeatures/Verify_custom_role_definition_constraints
+  [1;37mScenario:[0m Verify service account scope restrictions                  [1;30m# features/iam_permission_restrictions.feature:18[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                             [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mI run terraform plan on all modules[0m                           [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
+    [32mThen[0m [32mservice account bindings must be folder or project scoped[0m     [1;30m# iam-permission-restrictions_test.go:15 -> *bddContext[0m
+    [32mAnd[0m [32mno cross-environment service account access should be detected[0m [1;30m# iam-permission-restrictions_test.go:16 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Verify_TFE_pipeline_service_account_permission_restrictions
 
-  [1;37mScenario:[0m Verify custom role definition constraints                                  [1;30m# features/custom_roles_for_control_plane.feature:23[0m
-    [32mGiven[0m [32mthe GCP project ID is configured[0m                                             [1;30m# bdd_test.go:80 -> *bddContext[0m
-    [32mWhen[0m [32mI run terraform plan on all modules[0m                                           [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
-    [32mThen[0m [32mcustom role definitions must enumerate explicit permissions without wildcards[0m [1;30m# custom_roles_for_control_plane_test.go:61 -> *bddContext[0m
+  [1;37mScenario:[0m Verify TFE pipeline service account permission restrictions                             [1;30m# features/iam_permission_restrictions.feature:24[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                                          [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mI run terraform plan on all modules[0m                                                        [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
+    [32mThen[0m [32mpipeline service accounts must not be granted wildcard, owner, editor, or data-plane roles[0m [1;30m# iam-permission-restrictions_test.go:17 -> *bddContext[0m
 
 4 scenarios ([32m4 passed[0m)
-13 steps ([32m13 passed[0m)
-18.3769179s
---- PASS: TestE2ESuiteFeatures (18.43s)
-    --- PASS: TestE2ESuiteFeatures/Verify_no_vendor-managed_roles_are_used_for_control_plane (18.36s)
-    --- PASS: TestE2ESuiteFeatures/Verify_key_management_role_restrictions (0.00s)
-    --- PASS: TestE2ESuiteFeatures/Verify_deployment_role_restrictions (0.00s)
-    --- PASS: TestE2ESuiteFeatures/Verify_custom_role_definition_constraints (0.00s)
+14 steps ([32m14 passed[0m)
+13.5895529s
+--- PASS: TestE2ESuiteFeatures (13.60s)
+    --- PASS: TestE2ESuiteFeatures/Verify_no_wildcard_permissions_are_allowed_in_IAM_policies (13.58s)
+    --- PASS: TestE2ESuiteFeatures/Verify_conditional_scoping_at_trust_boundary (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Verify_service_account_scope_restrictions (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Verify_TFE_pipeline_service_account_permission_restrictions (0.00s)
 PASS
-ok  	github.com/mahadev4275/gcp-code-share/tests	21.951s
+ok  	github.com/mahadev4275/gcp-code-share/tests	16.315s

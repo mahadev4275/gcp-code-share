@@ -1,0 +1,52 @@
+=== RUN   TestE2ESuiteFeatures
+[1;37mFeature:[0m [E2E Suite] CMEK Policy for Infrastructure Data at Rest
+  As a Security Administrator,
+  I want to ensure all infrastructure data at rest is encrypted using Customer Managed Encryption Keys (CMEK)
+  So that encryption keys are managed through authorized IaC pipelines using standard Terraform modules.
+=== RUN   TestE2ESuiteFeatures/Symmetric_infrastructure_encryption_must_use_CMEK/BYOK_managed_via_IaC
+=== NAME  TestE2ESuiteFeatures
+    plan_helper_test.go:504: >>> [SUITE RUNNER] Building composition module with targeted modules: bq-cross-project-access, terraform-bq-scheduled-query, terraform-log-router-bq, terraform-log-bucket-cmek-bq-link, sql-alert-module
+TestE2ESuiteFeatures 2026-08-14T18:06:30+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T18:06:37+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1 -var location=global]
+TestE2ESuiteFeatures 2026-08-14T18:06:48+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+
+  [1;37mScenario:[0m Symmetric infrastructure encryption must use CMEK/BYOK managed via IaC     [1;30m# features/cmek_policy.feature:8[0m
+    [32mGiven[0m [32mthe scope is limited to the infrastructure layer[0m                             [1;30m# cmek_steps_test.go:11 -> *bddContext[0m
+    [32mAnd[0m [32mthe encryption requirement is for symmetric encryption of data at rest[0m         [1;30m# cmek_steps_test.go:12 -> *bddContext[0m
+    [32mWhen[0m [32mresources are provisioned using standard Terraform modules[0m                    [1;30m# cmek_steps_test.go:13 -> *bddContext[0m
+    [32mAnd[0m [32mthe deployment is managed through Infrastructure as Code (IaC) pipelines[0m       [1;30m# cmek_steps_test.go:14 -> *bddContext[0m
+    [31mThen[0m [31mthe data must be encrypted using Customer Managed Encryption Keys (CMEK/BYOK)[0m [1;30m# cmek_steps_test.go:15 -> *bddContext[0m
+    [1;31mOPA Conftest policy violation:
+[31mFAIL[0m - tfplan.json - cmek - Security violation: BigQuery dataset 'module.terraform_log_router_bq.google_bigquery_dataset.logs' is not using CMEK (default_encryption_configuration.kms_key_name is missing)
+[31mFAIL[0m - tfplan.json - cmek - Security violation: Logging bucket 'module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_logging_project_bucket_config.cmek_bucket' is not using CMEK (cmek_settings.kms_key_name is missing)
+
+[31m8 tests, 6 passed, 0 warnings, 2 failures, 0 exceptions[0m[0m
+    [36mAnd[0m [36mthe lifecycle of these keys must be managed by the same IaC pipelines[0m          [1;30m# cmek_steps_test.go:16 -> *bddContext[0m
+=== NAME  TestE2ESuiteFeatures/Symmetric_infrastructure_encryption_must_use_CMEK/BYOK_managed_via_IaC
+    suite.go:640: OPA Conftest policy violation:
+        [31mFAIL[0m - tfplan.json - cmek - Security violation: BigQuery dataset 'module.terraform_log_router_bq.google_bigquery_dataset.logs' is not using CMEK (default_encryption_configuration.kms_key_name is missing)
+        [31mFAIL[0m - tfplan.json - cmek - Security violation: Logging bucket 'module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_logging_project_bucket_config.cmek_bucket' is not using CMEK (cmek_settings.kms_key_name is missing)
+        
+        [31m8 tests, 6 passed, 0 warnings, 2 failures, 0 exceptions[0m
+
+--- [31mFailed steps:[0m
+
+  [31mScenario: Symmetric infrastructure encryption must use CMEK/BYOK managed via IaC[0m [1;30m# features/cmek_policy.feature:8[0m
+    [31mThen the data must be encrypted using Customer Managed Encryption Keys (CMEK/BYOK)[0m [1;30m# features/cmek_policy.feature:13[0m
+      [31mError: [0m[1;31mOPA Conftest policy violation:
+[31mFAIL[0m - tfplan.json - cmek - Security violation: BigQuery dataset 'module.terraform_log_router_bq.google_bigquery_dataset.logs' is not using CMEK (default_encryption_configuration.kms_key_name is missing)
+[31mFAIL[0m - tfplan.json - cmek - Security violation: Logging bucket 'module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_logging_project_bucket_config.cmek_bucket' is not using CMEK (cmek_settings.kms_key_name is missing)
+
+[31m8 tests, 6 passed, 0 warnings, 2 failures, 0 exceptions[0m[0m
+
+
+1 scenarios ([31m1 failed[0m)
+6 steps ([32m4 passed[0m, [31m1 failed[0m, [36m1 skipped[0m)
+19.6045898s
+=== NAME  TestE2ESuiteFeatures
+    bdd_test.go:122: non-zero status returned, failed to run feature tests
+--- FAIL: TestE2ESuiteFeatures (19.61s)
+    --- FAIL: TestE2ESuiteFeatures/Symmetric_infrastructure_encryption_must_use_CMEK/BYOK_managed_via_IaC (19.60s)
+FAIL
+FAIL	github.com/mahadev4275/gcp-code-share/tests	22.401s
+FAIL
