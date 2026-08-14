@@ -269,10 +269,16 @@ func generateAmalgamatedComposition(root string, moduleFilter []string) (string,
 		}
 	}
 
+	hasModule := make(map[string]bool)
+	for _, dir := range dirs {
+		hasModule[filepath.Base(dir)] = true
+	}
+
 	// Normalize Trace_scope provider version to be compatible with other modules' ~> 6.0 constraint,
 	// and add google-beta provider required for google_observability_trace_scope resource.
-	copiedTraceScopeProvider := filepath.Join(modulesDir, "Trace_scope", "provider.tf")
-	_ = os.WriteFile(copiedTraceScopeProvider, []byte(`terraform {
+	if hasModule["Trace_scope"] {
+		copiedTraceScopeProvider := filepath.Join(modulesDir, "Trace_scope", "provider.tf")
+		_ = os.WriteFile(copiedTraceScopeProvider, []byte(`terraform {
   required_providers {
     google = {
       source  = "hashicorp/google"
@@ -286,12 +292,12 @@ func generateAmalgamatedComposition(root string, moduleFilter []string) (string,
 }
 `), 0644)
 
-	// Patch the nested tf_for_scope module to use google-beta provider for the trace scope resource
-	copiedScopeTF := filepath.Join(modulesDir, "Trace_scope", "modules", "tf_for_scope", "main.tf")
-	if content, err := os.ReadFile(copiedScopeTF); err == nil {
-		contentStr := string(content)
-		if !strings.Contains(contentStr, "provider = google-beta") {
-			newContent := `terraform {
+		// Patch the nested tf_for_scope module to use google-beta provider for the trace scope resource
+		copiedScopeTF := filepath.Join(modulesDir, "Trace_scope", "modules", "tf_for_scope", "main.tf")
+		if content, err := os.ReadFile(copiedScopeTF); err == nil {
+			contentStr := string(content)
+			if !strings.Contains(contentStr, "provider = google-beta") {
+				newContent := `terraform {
   required_providers {
     google-beta = {
       source  = "hashicorp/google-beta"
@@ -301,42 +307,45 @@ func generateAmalgamatedComposition(root string, moduleFilter []string) (string,
 }
 
 ` + strings.Replace(contentStr,
-				`resource "google_observability_trace_scope" "observability_trace_scope" {`,
-				`resource "google_observability_trace_scope" "observability_trace_scope" {
+					`resource "google_observability_trace_scope" "observability_trace_scope" {`,
+					`resource "google_observability_trace_scope" "observability_trace_scope" {
   provider       = google-beta`, 1)
-			_ = os.WriteFile(copiedScopeTF, []byte(newContent), 0644)
+				_ = os.WriteFile(copiedScopeTF, []byte(newContent), 0644)
+			}
 		}
-	}
 
-	// Patch Trace_scope/main.tf to pass the google-beta provider to the nested tf_for_scope module
-	copiedTraceScopeMain := filepath.Join(modulesDir, "Trace_scope", "main.tf")
-	if content, err := os.ReadFile(copiedTraceScopeMain); err == nil {
-		contentStr := string(content)
-		if !strings.Contains(contentStr, "providers") {
-			newContent := strings.Replace(contentStr,
-				`source = "./modules/tf_for_scope"`,
-				`source = "./modules/tf_for_scope"
+		// Patch Trace_scope/main.tf to pass the google-beta provider to the nested tf_for_scope module
+		copiedTraceScopeMain := filepath.Join(modulesDir, "Trace_scope", "main.tf")
+		if content, err := os.ReadFile(copiedTraceScopeMain); err == nil {
+			contentStr := string(content)
+			if !strings.Contains(contentStr, "providers") {
+				newContent := strings.Replace(contentStr,
+					`source = "./modules/tf_for_scope"`,
+					`source = "./modules/tf_for_scope"
 
   providers = {
     google-beta = google-beta
   }`, 1)
-			_ = os.WriteFile(copiedTraceScopeMain, []byte(newContent), 0644)
+				_ = os.WriteFile(copiedTraceScopeMain, []byte(newContent), 0644)
+			}
 		}
-	}
 
-	// Add output.tf in copied Trace_scope inside suite_runner/modules/ to expose trace_scope_id from tf_for_scope
-	copiedTraceScopeOutput := filepath.Join(modulesDir, "Trace_scope", "output.tf")
-	_ = os.WriteFile(copiedTraceScopeOutput, []byte(`output "trace_scope_id" {
+		// Add output.tf in copied Trace_scope inside suite_runner/modules/ to expose trace_scope_id from tf_for_scope
+		copiedTraceScopeOutput := filepath.Join(modulesDir, "Trace_scope", "output.tf")
+		_ = os.WriteFile(copiedTraceScopeOutput, []byte(`output "trace_scope_id" {
   value = module.trace_scope.trace_scope_id
 }
 `), 0644)
+	}
 
 	// Patch copied logbucket-bqlink/main.tf inside suite_runner/modules/ to use _Default log bucket instead of _Trace
-	copiedLogbucketTF := filepath.Join(modulesDir, "logbucket-bqlink", "main.tf")
-	if content, err := os.ReadFile(copiedLogbucketTF); err == nil {
-		contentStr := string(content)
-		newContent := strings.Replace(contentStr, `bucket_id = "_Trace"`, `bucket_id = "_Default"`, 1)
-		_ = os.WriteFile(copiedLogbucketTF, []byte(newContent), 0644)
+	if hasModule["logbucket-bqlink"] {
+		copiedLogbucketTF := filepath.Join(modulesDir, "logbucket-bqlink", "main.tf")
+		if content, err := os.ReadFile(copiedLogbucketTF); err == nil {
+			contentStr := string(content)
+			newContent := strings.Replace(contentStr, `bucket_id = "_Trace"`, `bucket_id = "_Default"`, 1)
+			_ = os.WriteFile(copiedLogbucketTF, []byte(newContent), 0644)
+		}
 	}
 
 	var sb strings.Builder
@@ -411,9 +420,17 @@ variable "location" {
 		if declared["project_id"] {
 			switch base {
 			case "logbucket-bqlink", "terraform-log-router-bq":
-				sb.WriteString("  project_id = module.Trace_scope.trace_scope_id != \"\" ? var.project_id : var.project_id\n")
+				if hasModule["Trace_scope"] {
+					sb.WriteString("  project_id = module.Trace_scope.trace_scope_id != \"\" ? var.project_id : var.project_id\n")
+				} else {
+					sb.WriteString("  project_id = var.project_id\n")
+				}
 			case "bq-cross-project-access", "terraform-bq-scheduled-query":
-				sb.WriteString("  project_id = module.terraform_log_router_bq.sink_name != \"\" ? var.project_id : var.project_id\n")
+				if hasModule["terraform-log-router-bq"] {
+					sb.WriteString("  project_id = module.terraform_log_router_bq.sink_name != \"\" ? var.project_id : var.project_id\n")
+				} else {
+					sb.WriteString("  project_id = var.project_id\n")
+				}
 			default:
 				sb.WriteString("  project_id = var.project_id\n")
 			}
