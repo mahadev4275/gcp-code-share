@@ -1,4 +1,4 @@
-package main
+package public_access
 
 import future.keywords.in
 import future.keywords.contains

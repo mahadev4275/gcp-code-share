@@ -17,7 +17,7 @@ func (c *bddContext) registerCMEKPolicySteps(sc *godog.ScenarioContext) {
 }
 
 func (c *bddContext) theDataMustBeEncryptedUsingCMEK() error {
-	return c.runConftestAgainstMasterComposition()
+	return c.runConftestAgainstMasterComposition("cmek")
 }
 
 func (c *bddContext) theLifecycleOfTheseKeysMustBeManagedByIaC() error {

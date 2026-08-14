@@ -110,6 +110,9 @@ func getPlanResourceChanges(t *testing.T, dir string, vars map[string]interface{
 		return nil, fmt.Errorf("failed to show json in %s: %w", dir, err)
 	}
 
+	// Always write tfplan.json to dir for conftest / OPA inspection
+	_ = os.WriteFile(filepath.Join(dir, "tfplan.json"), []byte(planJSONStr), 0644)
+
 	var plan PlanJSON
 	if err := json.Unmarshal([]byte(planJSONStr), &plan); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal plan JSON for %s: %w", dir, err)
@@ -573,88 +576,23 @@ func extractEnvToken(value string) string {
 	return m[2]
 }
 
-func (c *bddContext) runConftestAgainstMasterComposition() error {
-	runnerDir, err := generateAmalgamatedComposition("..", getModuleFilter())
-	if err != nil {
-		return fmt.Errorf("failed to generate master composition module: %w", err)
+func (c *bddContext) runConftestAgainstMasterComposition(namespaces ...string) error {
+	if _, err := getRepositoryPlanChanges(c.t); err != nil {
+		return fmt.Errorf("failed to get repository plan changes for conftest: %w", err)
 	}
 
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if projectID == "" {
-		projectID = os.Getenv("PROJECT_ID")
-	}
-	if projectID == "" {
-		projectID = "mock-project-id"
-	}
-
-	region := os.Getenv("GOOGLE_CLOUD_REGION")
-	if region == "" {
-		region = "us-central1"
-	}
-
-	location := os.Getenv("GOOGLE_CLOUD_LOCATION")
-	if location == "" {
-		location = "global"
-	}
-
-	vars := map[string]interface{}{
-		"project_id": projectID,
-		"project":    projectID,
-		"projects":   []string{projectID},
-		"region":     region,
-		"location":   location,
-	}
-
-	planFile := "tfplan-master"
-	tfOpts := &terraform.Options{
-		TerraformDir: runnerDir,
-		Vars:         vars,
-		EnvVars: map[string]string{
-			"GOOGLE_CLOUD_PROJECT": projectID,
-		},
-	}
-	if isTFQuiet() {
-		tfOpts.Logger = logger.Discard
-	}
-
-	_, _ = terraform.InitE(c.t, tfOpts)
-	args := []string{"plan", "-out", planFile}
-	for k, v := range vars {
-		switch val := v.(type) {
-		case string:
-			args = append(args, "-var", fmt.Sprintf("%s=%s", k, val))
-		case []string:
-			var quoted []string
-			for _, s := range val {
-				quoted = append(quoted, fmt.Sprintf("%q", s))
-			}
-			listStr := "[" + strings.Join(quoted, ",") + "]"
-			args = append(args, "-var", fmt.Sprintf("%s=%s", k, listStr))
-		default:
-			args = append(args, "-var", fmt.Sprintf("%s=%v", k, val))
+	runnerDir := filepath.Join(".", "suite_runner")
+	ctx := context.Background()
+	conftestArgs := []string{"test", "tfplan.json", "--policy", "../../policies"}
+	for _, ns := range namespaces {
+		if ns != "" {
+			conftestArgs = append(conftestArgs, "--namespace", ns)
 		}
 	}
-	_, err = terraform.RunTerraformCommandE(c.t, tfOpts, args...)
-	if err != nil {
-		return fmt.Errorf("failed to generate plan for conftest: %w", err)
-	}
-	defer os.Remove(filepath.Join(runnerDir, planFile))
 
-	planJSONStr, err := terraform.RunTerraformCommandE(c.t, tfOpts, "show", "-json", planFile)
-	if err != nil {
-		return fmt.Errorf("failed to show plan JSON: %w", err)
-	}
-
-	tmpJSONPath := filepath.Join(runnerDir, "tfplan.json")
-	if err := os.WriteFile(tmpJSONPath, []byte(planJSONStr), 0644); err != nil {
-		return fmt.Errorf("failed to write plan JSON: %w", err)
-	}
-	defer os.Remove(tmpJSONPath)
-
-	ctx := context.Background()
 	conftestCmd := shell.Command{
 		Command:    "conftest",
-		Args:       []string{"test", "tfplan.json", "--policy", "../../policies"},
+		Args:       conftestArgs,
 		WorkingDir: runnerDir,
 	}
 	if isTFQuiet() {

@@ -1,0 +1,55 @@
+=== RUN   TestE2ESuiteFeatures
+[1;37mFeature:[0m Gemini for Google Cloud API (GCA) Compliance Verification
+  As a GCP Security Administrator
+  I want to verify that Gemini for Google Cloud API (cloudaicompanion.googleapis.com) meets all live API architecture and security standards
+  So that high criticality and sensitive workloads operate in a fully compliant environment
+=== RUN   TestE2ESuiteFeatures/Audit_live_GCA_IAM_policy_bindings_for_segregation_of_duties
+=== NAME  TestE2ESuiteFeatures
+    plan_helper_test.go:501: >>> [SUITE RUNNER] Building composition module with targeted modules: bq-cross-project-access, terraform-bq-scheduled-query, terraform-log-router-bq, terraform-log-bucket-cmek-bq-link, sql-alert-module
+TestE2ESuiteFeatures 2026-08-14T17:18:04+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T17:18:10+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var location=global -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1]
+TestE2ESuiteFeatures 2026-08-14T17:18:17+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+
+  [1;37mScenario:[0m Audit live GCA IAM policy bindings for segregation of duties                [1;30m# features/gca.feature:30[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                              [1;30m# bdd_test.go:80 -> *bddContext[0m
+
+========================================================================
+[EVALUATION LOG] Compliance Standard Under Verification: Segregation of Duties
+========================================================================
+    [32mWhen[0m [32mI evaluate compliance for "Segregation of Duties"[0m                              [1;30m# gca_test.go:21 -> *bddContext[0m
+[GCA SOD CHECK] Confirmed no GCA identities hold conflicting operational and administrative duties.
+    [32mThen[0m [32mGCA identities must not hold conflicting administrative and operational duties[0m [1;30m# gca_test.go:29 -> *bddContext[0m
+
+[1;37mFeature:[0m [E2E Suite] Segregation of Duties & IAM Role Restrictions
+  As a GCP security administrator
+  I want to enforce segregation of duties in IAM policies
+  So that no single identity accumulates conflicting duties or inappropriate permissions
+=== RUN   TestE2ESuiteFeatures/Verify_no_conflicting_duties_per_principal
+
+  [1;37mScenario:[0m Verify no conflicting duties per principal [1;30m# features/segregation_of_duties.feature:7[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m             [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mI run terraform plan on all modules[0m           [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
+    [32mThen[0m [32mno principal should hold conflicting duties[0m   [1;30m# segregation_of_duties_test.go:81 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Verify_pipeline_service_account_permissions
+
+  [1;37mScenario:[0m Verify pipeline service account permissions                                                [1;30m# features/segregation_of_duties.feature:12[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                                             [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mI run terraform plan on all modules[0m                                                           [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
+    [32mThen[0m [32mpipeline service accounts must only have deployment permissions and no human governance roles[0m [1;30m# segregation_of_duties_test.go:82 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Verify_human_principal_permissions
+
+  [1;37mScenario:[0m Verify human principal permissions                    [1;30m# features/segregation_of_duties.feature:17[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                        [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mWhen[0m [32mI run terraform plan on all modules[0m                      [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
+    [32mThen[0m [32mhuman principals must not hold pipeline deployment roles[0m [1;30m# segregation_of_duties_test.go:83 -> *bddContext[0m
+
+4 scenarios ([32m4 passed[0m)
+12 steps ([32m12 passed[0m)
+16.3766819s
+--- PASS: TestE2ESuiteFeatures (16.38s)
+    --- PASS: TestE2ESuiteFeatures/Audit_live_GCA_IAM_policy_bindings_for_segregation_of_duties (16.37s)
+    --- PASS: TestE2ESuiteFeatures/Verify_no_conflicting_duties_per_principal (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Verify_pipeline_service_account_permissions (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Verify_human_principal_permissions (0.00s)
+PASS
+ok  	github.com/mahadev4275/gcp-code-share/tests	19.096s

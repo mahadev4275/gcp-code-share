@@ -148,7 +148,7 @@ func TestPublicAccessRegoPolicyWithTerratest(t *testing.T) {
 			// Execute conftest command
 			conftestCmd := shell.Command{
 				Command:    "conftest",
-				Args:       []string{"test", "tfplan.json", "--policy", "../policies"},
+				Args:       []string{"test", "tfplan.json", "--policy", "../policies", "--namespace", "public_access"},
 				WorkingDir: terraformDir,
 			}
 			if isTFQuiet() {

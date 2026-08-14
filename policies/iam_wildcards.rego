@@ -1,4 +1,4 @@
-package main
+package iam_wildcards
 
 import future.keywords.in
 import future.keywords.contains

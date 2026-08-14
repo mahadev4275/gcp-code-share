@@ -164,7 +164,7 @@ func (c *bddContext) noPublicAccessAllowed() error {
 }
 
 func (c *bddContext) iRetrieveOrgPolicy() error {
-	return c.runConftestAgainstMasterComposition()
+	return c.runConftestAgainstMasterComposition("public_access")
 }
 
 func (c *bddContext) orgPolicyShouldBeEnforced() error {

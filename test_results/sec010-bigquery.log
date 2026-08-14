@@ -1,0 +1,42 @@
+=== RUN   TestE2ESuiteFeatures
+[1;37mFeature:[0m [E2E Suite] GCP Resource Public Access Prevention Check
+  As a GCP administrator
+  I want to ensure that logging, tracing, and observability bucket data are not public
+  So that sensitive logs and telemetry are protected
+=== RUN   TestE2ESuiteFeatures/Verify_Log_Buckets_and_GCS_Storage_Buckets_do_not_have_public_IAM_permissions
+=== NAME  TestE2ESuiteFeatures
+    plan_helper_test.go:504: >>> [SUITE RUNNER] Building composition module with targeted modules: bq-cross-project-access, terraform-bq-scheduled-query, terraform-log-router-bq, terraform-log-bucket-cmek-bq-link, sql-alert-module
+TestE2ESuiteFeatures 2026-08-14T17:44:35+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T17:44:42+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1 -var location=global]
+TestE2ESuiteFeatures 2026-08-14T17:44:51+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+
+  [1;37mScenario:[0m Verify Log Buckets and GCS Storage Buckets do not have public IAM permissions            [1;30m# features/resource_public_access.feature:7[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                                           [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mAnd[0m [32mthe test runner has sufficient GCP IAM privileges[0m                                            [1;30m# resource_public_access_test.go:25 -> *bddContext[0m
+    [32mWhen[0m [32mI inspect the IAM policies of all Log Views and GCS Storage Buckets in the project[0m          [1;30m# resource_public_access_test.go:26 -> *bddContext[0m
+    [32mThen[0m [32mno Log View or GCS Storage Bucket should be accessible to allUsers or allAuthenticatedUsers[0m [1;30m# resource_public_access_test.go:27 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Verify_Storage_Public_Access_Prevention_Org_Policy_is_enforced
+
+  [1;37mScenario:[0m Verify Storage Public Access Prevention Org Policy is enforced        [1;30m# features/resource_public_access.feature:13[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                                        [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mAnd[0m [32mthe test runner has sufficient GCP IAM privileges[0m                         [1;30m# resource_public_access_test.go:25 -> *bddContext[0m
+    [32mWhen[0m [32mI retrieve the effective Org Policy for Storage Public Access Prevention[0m [1;30m# resource_public_access_test.go:28 -> *bddContext[0m
+    [32mThen[0m [32mthe Public Access Prevention policy should be enforced[0m                   [1;30m# resource_public_access_test.go:29 -> *bddContext[0m
+=== RUN   TestE2ESuiteFeatures/Verify_Cloud_Logging_is_protected_by_VPC_Service_Controls
+
+  [1;37mScenario:[0m Verify Cloud Logging is protected by VPC Service Controls [1;30m# features/resource_public_access.feature:19[0m
+    [32mGiven[0m [32mthe GCP project ID is configured[0m                            [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [32mAnd[0m [32mthe test runner has sufficient GCP IAM privileges[0m             [1;30m# resource_public_access_test.go:25 -> *bddContext[0m
+Warning: Project parent is not an organization (folders/903999494742). Skipping runtime VPC-SC perimeter check.
+    [32mWhen[0m [32mI check the VPC Service Perimeters for the project[0m           [1;30m# resource_public_access_test.go:30 -> *bddContext[0m
+    [32mThen[0m [32mCloud Logging should be protected by a perimeter[0m             [1;30m# resource_public_access_test.go:31 -> *bddContext[0m
+
+3 scenarios ([32m3 passed[0m)
+12 steps ([32m12 passed[0m)
+53.316955s
+--- PASS: TestE2ESuiteFeatures (53.33s)
+    --- PASS: TestE2ESuiteFeatures/Verify_Log_Buckets_and_GCS_Storage_Buckets_do_not_have_public_IAM_permissions (51.61s)
+    --- PASS: TestE2ESuiteFeatures/Verify_Storage_Public_Access_Prevention_Org_Policy_is_enforced (0.16s)
+    --- PASS: TestE2ESuiteFeatures/Verify_Cloud_Logging_is_protected_by_VPC_Service_Controls (1.54s)
+PASS
+ok  	github.com/mahadev4275/gcp-code-share/tests	56.270s
