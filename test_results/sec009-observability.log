@@ -1,0 +1,30 @@
+=== RUN   TestE2ESuiteFeatures
+[1;37mFeature:[0m [E2E Suite] CMEK Policy for Infrastructure Data at Rest
+  As a Security Administrator,
+  I want to ensure all infrastructure data at rest is encrypted using Customer Managed Encryption Keys (CMEK)
+  So that encryption keys are managed through authorized IaC pipelines using standard Terraform modules.
+=== RUN   TestE2ESuiteFeatures/Symmetric_infrastructure_encryption_must_use_CMEK/BYOK_managed_via_IaC
+=== NAME  TestE2ESuiteFeatures
+    plan_helper_test.go:484: >>> [SUITE RUNNER] Building composition module with targeted modules: terraform-org-policy, terraform-cmek-policy, Trace_scope
+TestE2ESuiteFeatures 2026-08-14T10:35:33+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T10:35:40+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1 -var location=global -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4]
+TestE2ESuiteFeatures 2026-08-14T10:35:48+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+
+  [1;37mScenario:[0m Symmetric infrastructure encryption must use CMEK/BYOK managed via IaC     [1;30m# features/cmek_policy.feature:8[0m
+    [32mGiven[0m [32mthe scope is limited to the infrastructure layer[0m                             [1;30m# cmek_steps_test.go:11 -> *bddContext[0m
+    [32mAnd[0m [32mthe encryption requirement is for symmetric encryption of data at rest[0m         [1;30m# cmek_steps_test.go:12 -> *bddContext[0m
+    [32mWhen[0m [32mresources are provisioned using standard Terraform modules[0m                    [1;30m# cmek_steps_test.go:13 -> *bddContext[0m
+    [32mAnd[0m [32mthe deployment is managed through Infrastructure as Code (IaC) pipelines[0m       [1;30m# cmek_steps_test.go:14 -> *bddContext[0m
+TestE2ESuiteFeatures 2026-08-14T10:35:50+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T10:35:58+05:30 retry.go:159: terraform [plan -out tfplan-master -var region=us-central1 -var location=global -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"]]
+TestE2ESuiteFeatures 2026-08-14T10:36:04+05:30 retry.go:159: terraform [show -json tfplan-master]
+    [32mThen[0m [32mthe data must be encrypted using Customer Managed Encryption Keys (CMEK/BYOK)[0m [1;30m# cmek_steps_test.go:15 -> *bddContext[0m
+    [32mAnd[0m [32mthe lifecycle of these keys must be managed by the same IaC pipelines[0m          [1;30m# cmek_steps_test.go:16 -> *bddContext[0m
+
+1 scenarios ([32m1 passed[0m)
+6 steps ([32m6 passed[0m)
+33.3329182s
+--- PASS: TestE2ESuiteFeatures (33.34s)
+    --- PASS: TestE2ESuiteFeatures/Symmetric_infrastructure_encryption_must_use_CMEK/BYOK_managed_via_IaC (33.33s)
+PASS
+ok  	github.com/mahadev4275/gcp-code-share/tests	37.152s

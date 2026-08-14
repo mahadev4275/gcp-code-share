@@ -1,0 +1,66 @@
+=== RUN   TestE2ESuiteFeatures
+[1;37mFeature:[0m [E2E Suite] GCP APIs General Availability Check
+  As a GCP administrator
+  I want to ensure all enabled APIs in the project are in General Availability (GA)
+  So that the project does not rely on preview or beta features in production
+=== RUN   TestE2ESuiteFeatures/Verify_Cloud_API_is_enabled
+=== NAME  TestE2ESuiteFeatures
+    plan_helper_test.go:484: >>> [SUITE RUNNER] Building composition module with targeted modules: terraform-org-policy, terraform-cmek-policy, Trace_scope
+TestE2ESuiteFeatures 2026-08-14T11:21:57+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-14T11:22:03+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1 -var location=global]
+TestE2ESuiteFeatures 2026-08-14T11:22:11+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+
+  [1;37mScenario Outline:[0m Verify Cloud API is enabled     [1;30m# features/gcp_apis_ga.feature:7[0m
+[GA CHECK] Verified Service 'observability' Status: ENABLED
+[GA CHECK] Status assertion passed: API observability state is ENABLED
+[GA CHECK] ServiceUsage SDK verified API 'observability' is GA with status: ENABLED
+    [36mGiven[0m [36mthe GCP project ID is configured[0m          [1;30m# bdd_test.go:80 -> *bddContext[0m
+    [36mWhen[0m [36mI list the enabled services in the project[0m [1;30m# terraform-gcp-apis-ga_test.go:36 -> *bddContext[0m
+    [36mAnd[0m [36mI check the status of "[0m[1;36m<api>[0m[36m" API[0m           [1;30m# terraform-gcp-apis-ga_test.go:37 -> *bddContext[0m
+    [36mThen[0m [36mthe API state should be "[0m[1;36m<state>[0m[36m"[0m          [1;30m# terraform-gcp-apis-ga_test.go:38 -> *bddContext[0m
+
+    [1;37mExamples:[0m
+      | [36mapi[0m               | [36mstate[0m   |
+      | [32mobservability[0m     | [32mENABLED[0m |
+=== RUN   TestE2ESuiteFeatures/Verify_Cloud_API_is_enabled#01
+[GA CHECK] Verified Service 'geminicloudassist' Status: ENABLED
+[GA CHECK] Status assertion passed: API geminicloudassist state is ENABLED
+      | [31mgeminicloudassist[0m | [31mENABLED[0m |
+        [1;31mAPI 'geminicloudassist' is in Preview/Beta stage and is not in General Availability (GA) status[0m
+    suite.go:640: API 'geminicloudassist' is in Preview/Beta stage and is not in General Availability (GA) status
+=== RUN   TestE2ESuiteFeatures/Verify_Cloud_API_is_enabled#02
+[GA CHECK] Verified Service 'cloudaicompanion' Status: ENABLED
+[GA CHECK] Status assertion passed: API cloudaicompanion state is ENABLED
+      | [31mcloudaicompanion[0m  | [31mENABLED[0m |
+        [1;31mAPI 'cloudaicompanion' is in Preview/Beta stage and is not in General Availability (GA) status[0m
+    suite.go:640: API 'cloudaicompanion' is in Preview/Beta stage and is not in General Availability (GA) status
+=== RUN   TestE2ESuiteFeatures/Verify_Cloud_API_is_enabled#03
+[GA CHECK] Verified Service 'bigquery' Status: ENABLED
+[GA CHECK] Status assertion passed: API bigquery state is ENABLED
+[GA CHECK] ServiceUsage SDK verified API 'bigquery' is GA with status: ENABLED
+      | [32mbigquery[0m          | [32mENABLED[0m |
+
+--- [31mFailed steps:[0m
+
+  [31mScenario Outline: Verify Cloud API is enabled[0m [1;30m# features/gcp_apis_ga.feature:7[0m
+    [31mThen the API state should be "ENABLED"[0m [1;30m# features/gcp_apis_ga.feature:11[0m
+      [31mError: [0m[1;31mAPI 'geminicloudassist' is in Preview/Beta stage and is not in General Availability (GA) status[0m
+
+  [31mScenario Outline: Verify Cloud API is enabled[0m [1;30m# features/gcp_apis_ga.feature:7[0m
+    [31mThen the API state should be "ENABLED"[0m [1;30m# features/gcp_apis_ga.feature:11[0m
+      [31mError: [0m[1;31mAPI 'cloudaicompanion' is in Preview/Beta stage and is not in General Availability (GA) status[0m
+
+
+4 scenarios ([32m2 passed[0m, [31m2 failed[0m)
+16 steps ([32m14 passed[0m, [31m2 failed[0m)
+37.2048802s
+=== NAME  TestE2ESuiteFeatures
+    bdd_test.go:122: non-zero status returned, failed to run feature tests
+--- FAIL: TestE2ESuiteFeatures (37.21s)
+    --- PASS: TestE2ESuiteFeatures/Verify_Cloud_API_is_enabled (21.80s)
+    --- FAIL: TestE2ESuiteFeatures/Verify_Cloud_API_is_enabled#01 (4.35s)
+    --- FAIL: TestE2ESuiteFeatures/Verify_Cloud_API_is_enabled#02 (4.48s)
+    --- PASS: TestE2ESuiteFeatures/Verify_Cloud_API_is_enabled#03 (6.56s)
+FAIL
+FAIL	github.com/mahadev4275/gcp-code-share/tests	40.252s
+FAIL

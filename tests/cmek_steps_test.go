@@ -24,10 +24,26 @@ func (c *bddContext) theLifecycleOfTheseKeysMustBeManagedByIaC() error {
 	if c.projectID == "" {
 		return fmt.Errorf("GCP Project ID is not configured")
 	}
+
+	needsCMEK := false
+	hasKMS := false
+
 	for _, rc := range c.plannedChanges {
 		if rc.Type == "google_kms_crypto_key" || rc.Type == "google_kms_key_ring" {
-			return nil
+			hasKMS = true
+		}
+		// List of resources that store data at rest (matching the Rego policy)
+		if rc.Type == "google_storage_bucket" || rc.Type == "google_bigquery_dataset" ||
+			rc.Type == "google_bigquery_table" || rc.Type == "google_logging_project_bucket_config" ||
+			rc.Type == "google_pubsub_topic" || rc.Type == "google_sql_database_instance" ||
+			rc.Type == "google_compute_disk" {
+			needsCMEK = true
 		}
 	}
-	return fmt.Errorf("security policy violation: no KMS key rings (google_kms_key_ring) or crypto keys (google_kms_crypto_key) found in IaC planned changes for project %s", c.projectID)
+
+	if needsCMEK && !hasKMS {
+		return fmt.Errorf("security policy violation: data-at-rest resources are provisioned but no KMS key rings (google_kms_key_ring) or crypto keys (google_kms_crypto_key) found in IaC planned changes for project %s", c.projectID)
+	}
+
+	return nil
 }
