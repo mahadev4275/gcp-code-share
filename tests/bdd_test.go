@@ -90,6 +90,7 @@ func TestE2ESuiteFeatures(t *testing.T) {
 			c.registerEncryptionInTransitSteps(sc)
 			c.registerEncryptionComplianceSteps(sc)
 			c.registerGCASteps(sc)
+			c.registerSEC010GCASteps(sc)
 
 			// Register lifecycle hooks
 			sc.Before(func(ctx context.Context, scenario *godog.Scenario) (context.Context, error) {
