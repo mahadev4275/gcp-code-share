@@ -1,11 +1,20 @@
 variable "project_id" {
-  type = string
+  type    = string
+  default = "gcp-sbx-lab-core-80d4"
 }
-
+ 
 variable "dataset_id" {
-  type = string
+  type    = string
+  default = "bqdataset1_cmek"
 }
-
+ 
 variable "sink_name" {
-  type = string
+  type    = string
+  default = "logs-to-bigquery"
+}
+ 
+
+variable "region" {
+  type    = string
+  default = "us-central1"
 }
