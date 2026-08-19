@@ -19,10 +19,10 @@ variable "retention_days" {
 
 variable "kms_key_ring" {
   type    = string
-  default = "logging-keyring"
+  #default = "logging-keyring"
 }
 
 variable "kms_crypto_key" {
   type    = string
-  default = "logging-key"
+  #default = "logging-key"
 }

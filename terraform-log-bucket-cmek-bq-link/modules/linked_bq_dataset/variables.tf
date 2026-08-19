@@ -23,3 +23,13 @@ variable "description" {
   type        = string
   default     = "Linked BigQuery dataset for Log Analytics."
 }
+
+variable "kms_key_ring" {
+  type    = string
+  default = "logging-keyring-bq"
+}
+
+variable "kms_crypto_key" {
+  type    = string
+  default = "logging-key-bq"
+}

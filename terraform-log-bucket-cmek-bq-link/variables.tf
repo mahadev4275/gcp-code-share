@@ -19,7 +19,15 @@ variable "retention_days" {
   type        = number
   default     = 30
 }
+variable "kms_key_ring" {
+  type    = string
+  default = "logging-keyring-bq"
+}
 
+variable "kms_crypto_key" {
+  type    = string
+  default = "logging-key-bq"
+}
 variable "linked_dataset_id" {
   description = "Linked BigQuery dataset ID. Use only letters, numbers, and underscores."
   type        = string
