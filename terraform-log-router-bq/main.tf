@@ -92,9 +92,7 @@ resource "google_bigquery_dataset_iam_member" "sink_writer" {
 
   role = "roles/bigquery.dataEditor"
 
- 
   member = google_logging_project_sink.logs_to_bq.writer_identity
 
-} 
-
+}
  

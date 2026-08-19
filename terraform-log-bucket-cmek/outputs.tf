@@ -9,6 +9,7 @@ output "bucket_resource_name" {
 output "kms_key" {
   value = google_kms_crypto_key.logging.id
 }
+
 output "kms_key_ring_name" {
   value = google_kms_key_ring.logging.name
 }

@@ -78,3 +78,4 @@ resource "google_logging_project_bucket_config" "cmek_bucket" {
     google_kms_crypto_key_iam_member.logging_cmek_sa
   ]
 }
+

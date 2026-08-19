@@ -13,7 +13,6 @@ variable "sink_name" {
   default = "logs-to-bigquery"
 }
  
-
 variable "region" {
   type    = string
   default = "us-central1"
