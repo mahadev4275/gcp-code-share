@@ -5,7 +5,7 @@ variable "project_id" {
  
 variable "dataset_id" {
   type    = string
-  default = "bqdataset1_cmek"
+  default = "bqdataset12_cmek"
 }
  
 variable "sink_name" {
