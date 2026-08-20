@@ -4,4 +4,7 @@ resource "google_logging_linked_dataset" "linked_dataset" {
   parent      = "projects/${var.project_id}"
   location    = var.bucket_location
   description = var.description
+
+
+
 }

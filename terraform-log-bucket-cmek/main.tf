@@ -69,6 +69,7 @@ resource "google_logging_project_bucket_config" "cmek_bucket" {
 
   bucket_id      = var.bucket_id
   retention_days = var.retention_days
+  enable_analytics = true
 
   cmek_settings {
     kms_key_name = google_kms_crypto_key.logging.id

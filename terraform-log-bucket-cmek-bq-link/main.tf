@@ -36,6 +36,7 @@ module "linked_bq_dataset" {
   linked_dataset_id = var.linked_dataset_id
 
   description = "Linked BigQuery dataset for HSM CMEK-enabled Log Analytics bucket."
+ 
 
   depends_on = [
     module.cmek_log_bucket,
