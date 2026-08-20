@@ -22,6 +22,7 @@ deny contains msg if {
 	
 	enc := resource.change.after.default_encryption_configuration
 	not is_bq_cmek_configured(enc)
+	not is_bq_cmek_unknown(resource)
 	
 	msg := sprintf("Security violation: BigQuery dataset '%v' is not using CMEK (default_encryption_configuration.kms_key_name is missing)", [resource.address])
 }
@@ -44,6 +45,7 @@ deny contains msg if {
 	
 	cmek := resource.change.after.cmek_settings
 	not is_logging_cmek_configured(cmek)
+	not is_logging_cmek_unknown(resource)
 	
 	msg := sprintf("Security violation: Logging bucket '%v' is not using CMEK (cmek_settings.kms_key_name is missing)", [resource.address])
 }
@@ -107,6 +109,17 @@ is_bq_table_cmek_configured(enc) if {
 
 is_logging_cmek_configured(cmek) if {
 	cmek[0].kms_key_name != ""
+}
+
+# Check if kms_key_name is a computed/unknown value in the plan (references another resource)
+is_bq_cmek_unknown(resource) if {
+	unk := resource.change.after_unknown.default_encryption_configuration
+	unk[0].kms_key_name == true
+}
+
+is_logging_cmek_unknown(resource) if {
+	unk := resource.change.after_unknown.cmek_settings
+	unk[0].kms_key_name == true
 }
 
 is_str_kms_configured(kms) if {
