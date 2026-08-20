@@ -36,10 +36,11 @@ type PlanResourceChange struct {
 	Address string `json:"address"`
 	Type    string `json:"type"`
 	Name    string `json:"name"`
-	Change  struct {
-		Actions []string               `json:"actions"`
-		Before  map[string]interface{} `json:"before"`
-		After   map[string]interface{} `json:"after"`
+	Change struct {
+		Actions      []string               `json:"actions"`
+		Before       map[string]interface{} `json:"before"`
+		After        map[string]interface{} `json:"after"`
+		AfterUnknown map[string]interface{} `json:"after_unknown"`
 	} `json:"change"`
 }
 
@@ -234,11 +235,12 @@ func copyDir(src, dst string) error {
 // generateAmalgamatedComposition creates a composition Terraform module in tests/suite_runner/main.tf.
 // When moduleFilter is non-empty, only the specified module directories are included in the plan.
 func generateAmalgamatedComposition(root string, moduleFilter []string) (string, error) {
-	dirs, err := discoverTerraformModuleDirs(root)
+	allDirs, err := discoverTerraformModuleDirs(root)
 	if err != nil {
 		return "", err
 	}
 
+	dirs := allDirs
 	// Filter to only specified modules when -tf.modules flag is set
 	if len(moduleFilter) > 0 {
 		filterSet := make(map[string]bool)
@@ -246,7 +248,7 @@ func generateAmalgamatedComposition(root string, moduleFilter []string) (string,
 			filterSet[m] = true
 		}
 		var filtered []string
-		for _, dir := range dirs {
+		for _, dir := range allDirs {
 			if filterSet[filepath.Base(dir)] {
 				filtered = append(filtered, dir)
 			}
@@ -262,8 +264,8 @@ func generateAmalgamatedComposition(root string, moduleFilter []string) (string,
 		return "", fmt.Errorf("failed to create suite_runner/modules directory: %w", err)
 	}
 
-	// Copy each discovered module into tests/suite_runner/modules/
-	for _, dir := range dirs {
+	// Copy ALL discovered modules into tests/suite_runner/modules/ so relative submodules (e.g. ../terraform-log-bucket-cmek) are always fresh
+	for _, dir := range allDirs {
 		base := filepath.Base(dir)
 		dstDir := filepath.Join(modulesDir, base)
 		_ = os.RemoveAll(dstDir)
@@ -574,6 +576,27 @@ func extractEnvToken(value string) string {
 		return ""
 	}
 	return m[2]
+}
+
+// hasUnknownCondition checks if a condition block exists in the after_unknown
+// section of a Terraform plan. When a condition expression references a computed
+// value (e.g., another resource's ID), Terraform marks it as unknown at plan time.
+func hasUnknownCondition(afterUnknown map[string]interface{}) bool {
+	if afterUnknown == nil {
+		return false
+	}
+	cond, ok := afterUnknown["condition"]
+	if !ok || cond == nil {
+		return false
+	}
+	// after_unknown condition can be a bool (true) or a non-empty slice
+	if b, ok := cond.(bool); ok && b {
+		return true
+	}
+	if slice, ok := cond.([]interface{}); ok && len(slice) > 0 {
+		return true
+	}
+	return false
 }
 
 func (c *bddContext) runConftestAgainstMasterComposition(namespaces ...string) error {

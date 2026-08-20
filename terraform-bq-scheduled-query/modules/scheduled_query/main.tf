@@ -19,6 +19,12 @@ resource "google_bigquery_dataset_iam_member" "bq_editor" {
   role = "roles/bigquery.dataEditor"
 
   member = "serviceAccount:${google_service_account.scheduled_query_sa.email}"
+
+  condition {
+    title       = "restrict_to_scheduled_query_dataset"
+    description = "Scope dataEditor access to the scheduled query target dataset only"
+    expression  = "resource.name.endsWith(\"/datasets/${var.dataset_id}\")"
+  }
 }
 
 #########################################################

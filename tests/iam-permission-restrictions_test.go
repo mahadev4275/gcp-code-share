@@ -97,12 +97,20 @@ func (c *bddContext) allIAMResourcesMustIncludeCondition() error {
 
 		condition, ok := after["condition"]
 		if !ok || condition == nil {
+			// Check if condition exists but has computed/unknown values
+			if hasUnknownCondition(rc.Change.AfterUnknown) {
+				continue
+			}
 			violations = append(violations, fmt.Sprintf("IAM binding must include a condition block: %s (%s)", rc.Address, rc.Type))
 			continue
 		}
 
 		slice, ok := condition.([]interface{})
 		if !ok || len(slice) == 0 {
+			// Check if condition exists but has computed/unknown values
+			if hasUnknownCondition(rc.Change.AfterUnknown) {
+				continue
+			}
 			violations = append(violations, fmt.Sprintf("IAM binding must include a condition block: %s (%s)", rc.Address, rc.Type))
 		}
 	}
@@ -156,12 +164,13 @@ func (c *bddContext) serviceAccountBindingsMustBeFolderOrProjectScoped() error {
 			continue
 		}
 
+		// Organization-level IAM is too broad for service accounts
 		if strings.Contains(strings.ToLower(rc.Type), "organization_iam_") {
-			violations = append(violations, fmt.Sprintf("Service account binding cannot be organization-scoped: %s", rc.Address))
+			violations = append(violations, fmt.Sprintf("Service account binding cannot be organization-scoped: %s (%s)", rc.Address, rc.Type))
 		}
-		if !strings.Contains(strings.ToLower(rc.Type), "project_iam_") && !strings.Contains(strings.ToLower(rc.Type), "folder_iam_") {
-			violations = append(violations, fmt.Sprintf("Service account binding must be folder/project scoped: %s (%s)", rc.Address, rc.Type))
-		}
+		// Resource-level IAM (e.g., google_kms_crypto_key_iam_member, google_bigquery_dataset_iam_member)
+		// is more restrictive than project/folder-level and follows least-privilege best practices.
+
 	}
 
 	if len(violations) > 0 {

@@ -54,7 +54,15 @@ resource "google_kms_crypto_key_iam_member" "logging_cmek_sa" {
   role = "roles/cloudkms.cryptoKeyEncrypterDecrypter"
 
   member = "serviceAccount:${data.google_logging_project_cmek_settings.cmek_settings.service_account_id}"
+
+  condition {
+    title       = "restrict_to_logging_cmek_key"
+    description = "Scope encrypt/decrypt access to the logging CMEK key only"
+    expression  = "resource.name.endsWith(\"keyRings/${var.kms_key_ring}/cryptoKeys/${var.kms_crypto_key}\")"
+  }
 }
+
+
 
 ##########################################################
 # Cloud Logging Bucket With CMEK
