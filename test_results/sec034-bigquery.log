@@ -5,10 +5,10 @@
   So that privilege escalation, public access, and cross-environment access are prevented
 === RUN   TestE2ESuiteFeatures/Verify_no_wildcard_permissions_are_allowed_in_IAM_policies
 === NAME  TestE2ESuiteFeatures
-    plan_helper_test.go:504: >>> [SUITE RUNNER] Building composition module with targeted modules: bq-cross-project-access, terraform-bq-scheduled-query, terraform-log-router-bq, terraform-log-bucket-cmek-bq-link, sql-alert-module
-TestE2ESuiteFeatures 2026-08-14T18:23:46+05:30 retry.go:159: terraform [init -upgrade=false]
-TestE2ESuiteFeatures 2026-08-14T18:23:52+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"] -var region=us-central1 -var location=global]
-TestE2ESuiteFeatures 2026-08-14T18:24:01+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
+    plan_helper_test.go:506: >>> [SUITE RUNNER] Building composition module with targeted modules: bq-cross-project-access, terraform-bq-scheduled-query, terraform-log-router-bq, terraform-log-bucket-cmek-bq-link, sql-alert-module
+TestE2ESuiteFeatures 2026-08-26T16:37:51+05:30 retry.go:159: terraform [init -upgrade=false]
+TestE2ESuiteFeatures 2026-08-26T16:37:57+05:30 retry.go:159: terraform [plan -out tfplan-suite_runner -var region=us-central1 -var location=global -var project_id=gcp-sbx-lab-core-80d4 -var project=gcp-sbx-lab-core-80d4 -var projects=["gcp-sbx-lab-core-80d4"]]
+TestE2ESuiteFeatures 2026-08-26T16:38:06+05:30 retry.go:159: terraform [show -json tfplan-suite_runner]
 
   [1;37mScenario:[0m Verify no wildcard permissions are allowed in IAM policies                     [1;30m# features/iam_permission_restrictions.feature:7[0m
     [32mGiven[0m [32mthe GCP project ID is configured[0m                                                 [1;30m# bdd_test.go:80 -> *bddContext[0m
@@ -19,19 +19,15 @@ TestE2ESuiteFeatures 2026-08-14T18:24:01+05:30 retry.go:159: terraform [show -js
   [1;37mScenario:[0m Verify conditional scoping at trust boundary  [1;30m# features/iam_permission_restrictions.feature:12[0m
     [32mGiven[0m [32mthe GCP project ID is configured[0m                [1;30m# bdd_test.go:80 -> *bddContext[0m
     [32mWhen[0m [32mI run terraform plan on all modules[0m              [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
-    [31mThen[0m [31mall IAM resources must include a condition block[0m [1;30m# iam-permission-restrictions_test.go:13 -> *bddContext[0m
-    [1;31mIAM condition block violations: [IAM binding must include a condition block: module.terraform_log_router_bq.google_bigquery_dataset_iam_member.sink_writer (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.bq_cross_project_access.module.cross_project_access.google_bigquery_dataset_iam_member.member["User"] (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.terraform_bq_scheduled_query.module.billing_summary_query.google_bigquery_dataset_iam_member.bq_editor (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_kms_crypto_key_iam_member.logging_cmek_sa (google_kms_crypto_key_iam_member)][0m
-    [36mAnd[0m [36mno organization-level IAM bindings are allowed[0m    [1;30m# iam-permission-restrictions_test.go:14 -> *bddContext[0m
-    suite.go:640: IAM condition block violations: [IAM binding must include a condition block: module.terraform_log_router_bq.google_bigquery_dataset_iam_member.sink_writer (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.bq_cross_project_access.module.cross_project_access.google_bigquery_dataset_iam_member.member["User"] (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.terraform_bq_scheduled_query.module.billing_summary_query.google_bigquery_dataset_iam_member.bq_editor (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_kms_crypto_key_iam_member.logging_cmek_sa (google_kms_crypto_key_iam_member)]
+    [32mThen[0m [32mall IAM resources must include a condition block[0m [1;30m# iam-permission-restrictions_test.go:13 -> *bddContext[0m
+    [32mAnd[0m [32mno organization-level IAM bindings are allowed[0m    [1;30m# iam-permission-restrictions_test.go:14 -> *bddContext[0m
 === RUN   TestE2ESuiteFeatures/Verify_service_account_scope_restrictions
 
   [1;37mScenario:[0m Verify service account scope restrictions                  [1;30m# features/iam_permission_restrictions.feature:18[0m
     [32mGiven[0m [32mthe GCP project ID is configured[0m                             [1;30m# bdd_test.go:80 -> *bddContext[0m
     [32mWhen[0m [32mI run terraform plan on all modules[0m                           [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
-    [31mThen[0m [31mservice account bindings must be folder or project scoped[0m     [1;30m# iam-permission-restrictions_test.go:15 -> *bddContext[0m
-    [1;31mservice account scope violations: [Service account binding must be folder/project scoped: module.terraform_bq_scheduled_query.module.billing_summary_query.google_bigquery_dataset_iam_member.bq_editor (google_bigquery_dataset_iam_member) Service account binding must be folder/project scoped: module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_kms_crypto_key_iam_member.logging_cmek_sa (google_kms_crypto_key_iam_member)][0m
-    [36mAnd[0m [36mno cross-environment service account access should be detected[0m [1;30m# iam-permission-restrictions_test.go:16 -> *bddContext[0m
-    suite.go:640: service account scope violations: [Service account binding must be folder/project scoped: module.terraform_bq_scheduled_query.module.billing_summary_query.google_bigquery_dataset_iam_member.bq_editor (google_bigquery_dataset_iam_member) Service account binding must be folder/project scoped: module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_kms_crypto_key_iam_member.logging_cmek_sa (google_kms_crypto_key_iam_member)]
+    [32mThen[0m [32mservice account bindings must be folder or project scoped[0m     [1;30m# iam-permission-restrictions_test.go:15 -> *bddContext[0m
+    [32mAnd[0m [32mno cross-environment service account access should be detected[0m [1;30m# iam-permission-restrictions_test.go:16 -> *bddContext[0m
 === RUN   TestE2ESuiteFeatures/Verify_TFE_pipeline_service_account_permission_restrictions
 
   [1;37mScenario:[0m Verify TFE pipeline service account permission restrictions                             [1;30m# features/iam_permission_restrictions.feature:24[0m
@@ -39,27 +35,13 @@ TestE2ESuiteFeatures 2026-08-14T18:24:01+05:30 retry.go:159: terraform [show -js
     [32mWhen[0m [32mI run terraform plan on all modules[0m                                                        [1;30m# iam-permission-restrictions_test.go:11 -> *bddContext[0m
     [32mThen[0m [32mpipeline service accounts must not be granted wildcard, owner, editor, or data-plane roles[0m [1;30m# iam-permission-restrictions_test.go:17 -> *bddContext[0m
 
---- [31mFailed steps:[0m
-
-  [31mScenario: Verify conditional scoping at trust boundary[0m [1;30m# features/iam_permission_restrictions.feature:12[0m
-    [31mThen all IAM resources must include a condition block[0m [1;30m# features/iam_permission_restrictions.feature:15[0m
-      [31mError: [0m[1;31mIAM condition block violations: [IAM binding must include a condition block: module.terraform_log_router_bq.google_bigquery_dataset_iam_member.sink_writer (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.bq_cross_project_access.module.cross_project_access.google_bigquery_dataset_iam_member.member["User"] (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.terraform_bq_scheduled_query.module.billing_summary_query.google_bigquery_dataset_iam_member.bq_editor (google_bigquery_dataset_iam_member) IAM binding must include a condition block: module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_kms_crypto_key_iam_member.logging_cmek_sa (google_kms_crypto_key_iam_member)][0m
-
-  [31mScenario: Verify service account scope restrictions[0m [1;30m# features/iam_permission_restrictions.feature:18[0m
-    [31mThen service account bindings must be folder or project scoped[0m [1;30m# features/iam_permission_restrictions.feature:21[0m
-      [31mError: [0m[1;31mservice account scope violations: [Service account binding must be folder/project scoped: module.terraform_bq_scheduled_query.module.billing_summary_query.google_bigquery_dataset_iam_member.bq_editor (google_bigquery_dataset_iam_member) Service account binding must be folder/project scoped: module.terraform_log_bucket_cmek_bq_link.module.cmek_log_bucket.google_kms_crypto_key_iam_member.logging_cmek_sa (google_kms_crypto_key_iam_member)][0m
-
-
-4 scenarios ([32m2 passed[0m, [31m2 failed[0m)
-14 steps ([32m10 passed[0m, [31m2 failed[0m, [36m2 skipped[0m)
-16.4759162s
-=== NAME  TestE2ESuiteFeatures
-    bdd_test.go:122: non-zero status returned, failed to run feature tests
---- FAIL: TestE2ESuiteFeatures (16.48s)
-    --- PASS: TestE2ESuiteFeatures/Verify_no_wildcard_permissions_are_allowed_in_IAM_policies (16.46s)
-    --- FAIL: TestE2ESuiteFeatures/Verify_conditional_scoping_at_trust_boundary (0.00s)
-    --- FAIL: TestE2ESuiteFeatures/Verify_service_account_scope_restrictions (0.00s)
+4 scenarios ([32m4 passed[0m)
+14 steps ([32m14 passed[0m)
+16.8437364s
+--- PASS: TestE2ESuiteFeatures (16.85s)
+    --- PASS: TestE2ESuiteFeatures/Verify_no_wildcard_permissions_are_allowed_in_IAM_policies (16.83s)
+    --- PASS: TestE2ESuiteFeatures/Verify_conditional_scoping_at_trust_boundary (0.00s)
+    --- PASS: TestE2ESuiteFeatures/Verify_service_account_scope_restrictions (0.00s)
     --- PASS: TestE2ESuiteFeatures/Verify_TFE_pipeline_service_account_permission_restrictions (0.00s)
-FAIL
-FAIL	github.com/mahadev4275/gcp-code-share/tests	19.185s
-FAIL
+PASS
+ok  	github.com/mahadev4275/gcp-code-share/tests	19.313s
