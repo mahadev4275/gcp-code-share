@@ -9,10 +9,11 @@ variable "dataset_id" {
 variable "query_name" {
   type = string
 }
-
+ 
 variable "query" {
   type = string
 }
+
 
 variable "schedule" {
   type    = string
